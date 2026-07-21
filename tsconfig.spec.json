@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.spec.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "noEmit": true,
+    "rootDir": "."
+  }
+}
