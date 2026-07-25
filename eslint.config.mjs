@@ -1,4 +1,5 @@
 // @ts-check
+/// <reference types="node" />
 import eslint from '@eslint/js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
@@ -37,6 +38,15 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         project: './tsconfig.spec.json',
+        projectService: false,
+      },
+    },
+  },
+  {
+    files: ['prisma/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: './prisma/tsconfig.json',
         projectService: false,
       },
     },
