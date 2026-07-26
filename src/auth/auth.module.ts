@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 
 const DEFAULT_JWT_EXPIRES_IN_SECONDS = 900; // 15 minutes
@@ -22,7 +24,8 @@ const DEFAULT_JWT_EXPIRES_IN_SECONDS = 900; // 15 minutes
       }),
     }),
   ],
-  providers: [JwtStrategy],
+  controllers: [AuthController],
+  providers: [AuthService, JwtStrategy],
   exports: [JwtModule, PassportModule],
 })
 export class AuthModule {}
