@@ -42,8 +42,4 @@ describe('RolesGuard', () => {
       ),
     ).toBe(false);
   });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
 });
