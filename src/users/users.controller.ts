@@ -4,8 +4,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { UserQueryDto } from '../common/schemas/user.schema';
-import { PublicUser } from '../common/user-response';
+import { PublicUser } from './dto/public-user.dto';
+import { UserQueryDto } from './dto/user-query.dto';
 import type { AuthenticatedUser } from '../common/types/authenticated-user.interface';
 import { UsersService } from './users.service';
 

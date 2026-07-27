@@ -1,9 +1,5 @@
 import { User } from '@prisma/client';
-
-export type PublicUser = Pick<
-  User,
-  'id' | 'email' | 'role' | 'createdAt' | 'updatedAt'
->;
+import { PublicUser } from '../dto/public-user.dto';
 
 export function toPublicUser(user: User): PublicUser {
   // Whitelist public fields only — never expose passwordHash in API responses.

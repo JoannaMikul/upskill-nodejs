@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PublicUser, toPublicUser } from '../common/user-response';
+import { PublicUser } from './dto/public-user.dto';
+import { toPublicUser } from './mappers/user.mapper';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()

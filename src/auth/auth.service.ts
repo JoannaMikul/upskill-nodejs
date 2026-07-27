@@ -4,10 +4,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Role, User } from '@prisma/client';
+import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { LoginDto, RegisterDto } from '../common/schemas/auth.schema';
-import { PublicUser, toPublicUser } from '../common/user-response';
+import { PublicUser } from '../users/dto/public-user.dto';
+import { mapToCreateUserInput } from '../users/mappers/create-user.mapper';
+import { toPublicUser } from '../users/mappers/user.mapper';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { mapRegisterDtoToCredentials } from './mappers/register.mapper';
 import { JwtPayload } from '../common/types/authenticated-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -21,24 +25,25 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<PublicUser> {
-    const email = dto.email.toLowerCase();
+    const credentials = mapRegisterDtoToCredentials(dto);
 
     const existingUser = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email: credentials.email },
     });
 
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+    const passwordHash = await bcrypt.hash(credentials.password, BCRYPT_ROUNDS);
+
+    const createUserInput = mapToCreateUserInput(
+      credentials.email,
+      passwordHash,
+    );
 
     const user = await this.prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        role: Role.SUBCONTRACTOR,
-      },
+      data: createUserInput,
     });
 
     return toPublicUser(user);
