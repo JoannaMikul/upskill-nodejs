@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
-import { createMockUser } from '../test/create-mock-user';
+import { createMockUser, MOCK_USER_ID } from '../test/create-mock-user';
 import { createUsersServiceTestContext } from '../test/create-users-service-test-context';
 
 describe('UsersService', () => {
@@ -12,10 +12,10 @@ describe('UsersService', () => {
 
       prismaService.user.findUnique.mockResolvedValue(mockUser);
 
-      const result = await usersService.findById('user-uuid');
+      const result = await usersService.findById(MOCK_USER_ID as string);
 
       expect(prismaService.user.findUnique).toHaveBeenCalledWith({
-        where: { id: 'user-uuid' },
+        where: { id: MOCK_USER_ID as string },
       });
       expect(result).toEqual({
         id: mockUser.id,
@@ -33,9 +33,9 @@ describe('UsersService', () => {
 
       prismaService.user.findUnique.mockResolvedValue(null);
 
-      await expect(usersService.findById('non-existent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        usersService.findById('00000000-0000-0000-0000-000000000001'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
