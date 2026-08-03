@@ -1,11 +1,11 @@
 import {
-  ApiErrorResponseBody,
   authHeader,
   createTestActors,
   e2eRequest,
-  RegisterResponseBody,
+  ErrorResponseDto,
   setupE2eSuite,
   TestActors,
+  UserResponseDto,
 } from './e2e-setup';
 
 const customerCredentials = {
@@ -27,7 +27,7 @@ describe('Users', () => {
       .set('Authorization', authHeader(actors.customerToken))
       .expect(200);
 
-    expect(response.body as RegisterResponseBody).toMatchObject({
+    expect(response.body as UserResponseDto).toMatchObject({
       id: actors.customer.id,
       email: customerCredentials.email,
       role: 'CUSTOMER',
@@ -37,7 +37,7 @@ describe('Users', () => {
   it('returns 401 for GET /users/me without token', async () => {
     const response = await e2eRequest(e2e.app).get('/users/me').expect(401);
 
-    expect(response.body as ApiErrorResponseBody).toMatchObject({
+    expect(response.body as ErrorResponseDto).toMatchObject({
       statusCode: 401,
     });
   });
@@ -48,7 +48,7 @@ describe('Users', () => {
       .set('Authorization', authHeader(actors.managerToken))
       .expect(200);
 
-    expect(response.body as RegisterResponseBody).toMatchObject({
+    expect(response.body as UserResponseDto).toMatchObject({
       id: actors.customer.id,
       email: customerCredentials.email,
       role: 'CUSTOMER',
@@ -62,7 +62,7 @@ describe('Users', () => {
       .set('Authorization', authHeader(actors.managerToken))
       .expect(200);
 
-    expect(response.body as RegisterResponseBody).toMatchObject({
+    expect(response.body as UserResponseDto).toMatchObject({
       id: actors.customer.id,
       email: customerCredentials.email,
       role: 'CUSTOMER',
@@ -75,7 +75,7 @@ describe('Users', () => {
       .set('Authorization', authHeader(actors.customerToken))
       .expect(403);
 
-    expect(response.body as ApiErrorResponseBody).toMatchObject({
+    expect(response.body as ErrorResponseDto).toMatchObject({
       statusCode: 403,
     });
   });
@@ -87,7 +87,7 @@ describe('Users', () => {
       .set('Authorization', authHeader(actors.customerToken))
       .expect(403);
 
-    expect(response.body as ApiErrorResponseBody).toMatchObject({
+    expect(response.body as ErrorResponseDto).toMatchObject({
       statusCode: 403,
     });
   });
@@ -98,7 +98,7 @@ describe('Users', () => {
       .set('Authorization', authHeader(actors.managerToken))
       .expect(404);
 
-    expect(response.body as ApiErrorResponseBody).toMatchObject({
+    expect(response.body as ErrorResponseDto).toMatchObject({
       statusCode: 404,
     });
   });

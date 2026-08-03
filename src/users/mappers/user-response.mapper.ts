@@ -1,7 +1,7 @@
 import { Account } from '@prisma/client';
-import { PublicUser } from '../dto/public-user.dto';
+import { UserResponseDto } from '../dto/user-response.dto';
 
-export function toPublicUser(account: Account): PublicUser {
+export function toUserResponseDto(account: Account): UserResponseDto {
   // Whitelist public fields only — never expose passwordHash in API responses.
   const { id, email, role, createdAt, updatedAt } = account;
   return { id, email, role, createdAt, updatedAt };

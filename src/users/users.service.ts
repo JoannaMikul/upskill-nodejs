@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PublicUser } from './dto/public-user.dto';
-import { toPublicUser } from './mappers/user.mapper';
+import { UserResponseDto } from './dto/user-response.dto';
+import { toUserResponseDto } from './mappers/user-response.mapper';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findById(id: string): Promise<PublicUser> {
+  async findById(id: string): Promise<UserResponseDto> {
     const account = await this.prisma.account.findUnique({
       where: { id },
     });
@@ -16,20 +16,18 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    return toPublicUser(account);
+    return toUserResponseDto(account);
   }
 
-  async findByEmail(email: string): Promise<PublicUser> {
-    const formattedEmail = email.toLowerCase();
-
+  async findByEmail(email: string): Promise<UserResponseDto> {
     const account = await this.prisma.account.findUnique({
-      where: { email: formattedEmail },
+      where: { email: email.toLowerCase() },
     });
 
     if (!account) {
       throw new NotFoundException('User not found');
     }
 
-    return toPublicUser(account);
+    return toUserResponseDto(account);
   }
 }

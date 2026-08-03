@@ -6,12 +6,13 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Account } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { PublicUser } from '../users/dto/public-user.dto';
+import { UserResponseDto } from '../users/dto/user-response.dto';
 import { mapToCreateAccountInput } from '../users/mappers/create-account.mapper';
-import { toPublicUser } from '../users/mappers/user.mapper';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import { mapRegisterDtoToCredentials } from './mappers/register.mapper';
+import { toUserResponseDto } from '../users/mappers/user-response.mapper';
+import { AuthLoginDto } from './dto/auth-login.dto';
+import { AuthLoginResponseDto } from './dto/auth-login-response.dto';
+import { RegisterCustomerDto } from './dto/register-customer.dto';
+import { mapRegisterCustomerDtoToInput } from './mappers/register-customer.mapper';
 import { JwtPayload } from '../common/types/authenticated-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -24,8 +25,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<PublicUser> {
-    const credentials = mapRegisterDtoToCredentials(dto);
+  async register(dto: RegisterCustomerDto): Promise<UserResponseDto> {
+    const credentials = mapRegisterCustomerDtoToInput(dto);
 
     const existingAccount = await this.prisma.account.findUnique({
       where: { email: credentials.email },
@@ -53,12 +54,10 @@ export class AuthService {
       }),
     );
 
-    return toPublicUser(account);
+    return toUserResponseDto(account);
   }
 
-  async login(
-    dto: LoginDto,
-  ): Promise<{ accessToken: string; user: PublicUser }> {
+  async login(dto: AuthLoginDto): Promise<AuthLoginResponseDto> {
     const email = dto.email.toLowerCase();
 
     const account = await this.prisma.account.findUnique({
@@ -82,7 +81,7 @@ export class AuthService {
 
     return {
       accessToken,
-      user: toPublicUser(account),
+      user: toUserResponseDto(account),
     };
   }
 

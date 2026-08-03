@@ -1,11 +1,11 @@
 import {
-  ApiErrorResponseBody,
+  AuthLoginResponseDto,
   e2eRequest,
-  LoginResponseBody,
+  ErrorResponseDto,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
-  RegisterResponseBody,
   setupE2eSuite,
+  UserResponseDto,
 } from './e2e-setup';
 
 const customer = {
@@ -22,7 +22,7 @@ describe('Auth', () => {
       .send(customer)
       .expect(201);
 
-    const body = response.body as RegisterResponseBody;
+    const body = response.body as UserResponseDto;
 
     expect(body).toMatchObject({
       email: customer.email,
@@ -42,7 +42,7 @@ describe('Auth', () => {
       })
       .expect(200);
 
-    const body = response.body as LoginResponseBody;
+    const body = response.body as AuthLoginResponseDto;
 
     expect(body).toHaveProperty('accessToken');
     expect(typeof body.accessToken).toBe('string');
@@ -60,7 +60,7 @@ describe('Auth', () => {
       .send(customer)
       .expect(200);
 
-    const body = response.body as LoginResponseBody;
+    const body = response.body as AuthLoginResponseDto;
 
     expect(body).toHaveProperty('accessToken');
     expect(body.user).toMatchObject({
@@ -77,7 +77,7 @@ describe('Auth', () => {
       .send(customer)
       .expect(409);
 
-    const body = response.body as ApiErrorResponseBody;
+    const body = response.body as ErrorResponseDto;
 
     expect(body).toMatchObject({
       statusCode: 409,
@@ -96,7 +96,7 @@ describe('Auth', () => {
       })
       .expect(401);
 
-    const body = response.body as ApiErrorResponseBody;
+    const body = response.body as ErrorResponseDto;
 
     expect(body).toMatchObject({
       statusCode: 401,

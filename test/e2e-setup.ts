@@ -5,8 +5,9 @@ import * as bcrypt from 'bcrypt';
 import supertest from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
-import { ErrorResponseBody } from '../src/common/filters/http-exception.filter';
-import { PublicUser } from '../src/users/dto/public-user.dto';
+import { AuthLoginResponseDto } from '../src/auth/dto/auth-login-response.dto';
+import { ErrorResponseDto } from '../src/common/filters/http-exception.filter';
+import { UserResponseDto } from '../src/users/dto/user-response.dto';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 const DEFAULT_MANAGER_EMAIL = 'manager@example.com';
@@ -17,14 +18,6 @@ export const MANAGER_EMAIL = (
 ).toLowerCase();
 export const MANAGER_PASSWORD =
   process.env.MANAGER_PASSWORD ?? DEFAULT_MANAGER_PASSWORD;
-
-export interface LoginResponseBody {
-  accessToken: string;
-  user: PublicUser;
-}
-
-export type RegisterResponseBody = PublicUser;
-export type ApiErrorResponseBody = ErrorResponseBody;
 
 export function e2eRequest(app: INestApplication) {
   const server = app.getHttpServer() as App;
@@ -38,7 +31,7 @@ export interface AuthCredentials {
 
 export interface TestActors {
   managerToken: string;
-  customer: RegisterResponseBody;
+  customer: UserResponseDto;
   customerToken: string;
 }
 
@@ -49,25 +42,25 @@ export function authHeader(token: string): string {
 export async function registerUser(
   app: INestApplication,
   credentials: AuthCredentials,
-): Promise<RegisterResponseBody> {
+): Promise<UserResponseDto> {
   const response = await e2eRequest(app)
     .post('/auth/register')
     .send(credentials)
     .expect(201);
 
-  return response.body as RegisterResponseBody;
+  return response.body as UserResponseDto;
 }
 
 export async function loginUser(
   app: INestApplication,
   credentials: AuthCredentials,
-): Promise<LoginResponseBody> {
+): Promise<AuthLoginResponseDto> {
   const response = await e2eRequest(app)
     .post('/auth/login')
     .send(credentials)
     .expect(200);
 
-  return response.body as LoginResponseBody;
+  return response.body as AuthLoginResponseDto;
 }
 
 export async function createTestActors(
@@ -172,3 +165,5 @@ export async function cleanupTestUsers(prisma: PrismaService): Promise<void> {
     },
   });
 }
+
+export type { AuthLoginResponseDto, ErrorResponseDto, UserResponseDto };
