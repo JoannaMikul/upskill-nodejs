@@ -6,11 +6,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Account } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { UserResponseDto } from '../users/dto/user-response.dto';
 import { mapToCreateAccountInput } from '../users/mappers/create-account.mapper';
-import { toUserResponseDto } from '../users/mappers/user-response.mapper';
 import { AuthLoginDto } from './dto/auth-login.dto';
-import { AuthLoginResponseDto } from './dto/auth-login-response.dto';
 import { RegisterCustomerDto } from './dto/register-customer.dto';
 import { mapRegisterCustomerDtoToInput } from './mappers/register-customer.mapper';
 import { JwtPayload } from '../common/types/authenticated-user.interface';
@@ -25,7 +22,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterCustomerDto): Promise<UserResponseDto> {
+  async register(dto: RegisterCustomerDto): Promise<Account> {
     const credentials = mapRegisterCustomerDtoToInput(dto);
 
     const existingAccount = await this.prisma.account.findUnique({
@@ -43,7 +40,7 @@ export class AuthService {
       passwordHash,
     );
 
-    const account = await this.prisma.$transaction((tx) =>
+    return this.prisma.$transaction((tx) =>
       tx.account.create({
         data: {
           ...createAccountInput,
@@ -53,11 +50,11 @@ export class AuthService {
         },
       }),
     );
-
-    return toUserResponseDto(account);
   }
 
-  async login(dto: AuthLoginDto): Promise<AuthLoginResponseDto> {
+  async login(
+    dto: AuthLoginDto,
+  ): Promise<{ accessToken: string; account: Account }> {
     const email = dto.email.toLowerCase();
 
     const account = await this.prisma.account.findUnique({
@@ -79,10 +76,7 @@ export class AuthService {
 
     const accessToken = this.signToken(account);
 
-    return {
-      accessToken,
-      user: toUserResponseDto(account),
-    };
+    return { accessToken, account };
   }
 
   signToken(account: Pick<Account, 'id' | 'role'>): string {

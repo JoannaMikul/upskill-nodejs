@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserByEmailQueryDto } from './dto/user-by-email-query.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { toUserResponseDto } from './mappers/user-response.mapper';
 import type { AuthenticatedUser } from '../common/types/authenticated-user.interface';
 import { UsersService } from './users.service';
 
@@ -15,21 +16,28 @@ export class UsersController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  getMe(@CurrentUser() user: AuthenticatedUser): Promise<UserResponseDto> {
-    return this.usersService.findById(user.sub);
+  async getMe(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<UserResponseDto> {
+    const account = await this.usersService.findById(user.sub);
+    return toUserResponseDto(account);
   }
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.MANAGER)
-  findByEmail(@Query() query: UserByEmailQueryDto): Promise<UserResponseDto> {
-    return this.usersService.findByEmail(query.email);
+  async findByEmail(
+    @Query() query: UserByEmailQueryDto,
+  ): Promise<UserResponseDto> {
+    const account = await this.usersService.findByEmail(query.email);
+    return toUserResponseDto(account);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.MANAGER)
-  findById(@Param('id') id: string): Promise<UserResponseDto> {
-    return this.usersService.findById(id);
+  async findById(@Param('id') id: string): Promise<UserResponseDto> {
+    const account = await this.usersService.findById(id);
+    return toUserResponseDto(account);
   }
 }

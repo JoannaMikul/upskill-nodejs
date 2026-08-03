@@ -1,13 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { UserResponseDto } from './dto/user-response.dto';
-import { toUserResponseDto } from './mappers/user-response.mapper';
+import { Account } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findById(id: string): Promise<UserResponseDto> {
+  async findById(id: string): Promise<Account> {
     const account = await this.prisma.account.findUnique({
       where: { id },
     });
@@ -16,10 +15,10 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    return toUserResponseDto(account);
+    return account;
   }
 
-  async findByEmail(email: string): Promise<UserResponseDto> {
+  async findByEmail(email: string): Promise<Account> {
     const account = await this.prisma.account.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -28,6 +27,6 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    return toUserResponseDto(account);
+    return account;
   }
 }

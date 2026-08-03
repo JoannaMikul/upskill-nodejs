@@ -37,14 +37,7 @@ describe('AuthService', () => {
           },
         },
       });
-      expect(result).toEqual({
-        id: mockAccount.id,
-        email: mockAccount.email,
-        role: mockAccount.role,
-        createdAt: mockAccount.createdAt,
-        updatedAt: mockAccount.updatedAt,
-      });
-      expect(result).not.toHaveProperty('passwordHash');
+      expect(result).toEqual(mockAccount);
     });
 
     it('rejects duplicate email with ConflictException and does not create user', async () => {
@@ -67,7 +60,7 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('returns access token and public user on valid credentials', async () => {
+    it('returns access token and account on valid credentials', async () => {
       const { authService, prismaService, jwtService } =
         await createAuthServiceTestContext();
       const mockAccount = createMockAccount();
@@ -86,13 +79,7 @@ describe('AuthService', () => {
       });
       expect(result).toEqual({
         accessToken: 'mock-jwt-token',
-        user: {
-          id: mockAccount.id,
-          email: mockAccount.email,
-          role: mockAccount.role,
-          createdAt: mockAccount.createdAt,
-          updatedAt: mockAccount.updatedAt,
-        },
+        account: mockAccount,
       });
     });
 

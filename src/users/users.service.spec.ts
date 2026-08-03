@@ -8,7 +8,7 @@ import { createUsersServiceTestContext } from '../test/create-users-service-test
 
 describe('UsersService', () => {
   describe('findById', () => {
-    it('returns public user when found', async () => {
+    it('returns account when found', async () => {
       const { usersService, prismaService } =
         await createUsersServiceTestContext();
       const mockAccount = createMockAccount({ role: Role.MANAGER });
@@ -20,14 +20,7 @@ describe('UsersService', () => {
       expect(prismaService.account.findUnique).toHaveBeenCalledWith({
         where: { id: MOCK_ACCOUNT_ID },
       });
-      expect(result).toEqual({
-        id: mockAccount.id,
-        email: mockAccount.email,
-        role: mockAccount.role,
-        createdAt: mockAccount.createdAt,
-        updatedAt: mockAccount.updatedAt,
-      });
-      expect(result).not.toHaveProperty('passwordHash');
+      expect(result).toEqual(mockAccount);
     });
 
     it('rejects findById when user does not exist with NotFoundException', async () => {
@@ -43,7 +36,7 @@ describe('UsersService', () => {
   });
 
   describe('findByEmail', () => {
-    it('returns public user on exact match with lowercase normalization', async () => {
+    it('returns account on exact match with lowercase normalization', async () => {
       const { usersService, prismaService } =
         await createUsersServiceTestContext();
       const mockAccount = createMockAccount({ role: Role.MANAGER });
@@ -55,7 +48,7 @@ describe('UsersService', () => {
       expect(prismaService.account.findUnique).toHaveBeenCalledWith({
         where: { email: 'test@example.com' },
       });
-      expect(result.email).toBe('test@example.com');
+      expect(result).toEqual(mockAccount);
     });
 
     it('rejects findByEmail when no user matches the address with NotFoundException', async () => {

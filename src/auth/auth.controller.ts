@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { UserResponseDto } from '../users/dto/user-response.dto';
+import { toUserResponseDto } from '../users/mappers/user-response.mapper';
 import { AuthLoginDto } from './dto/auth-login.dto';
 import { AuthLoginResponseDto } from './dto/auth-login-response.dto';
 import { RegisterCustomerDto } from './dto/register-customer.dto';
@@ -11,13 +12,18 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() dto: RegisterCustomerDto): Promise<UserResponseDto> {
-    return this.authService.register(dto);
+    const account = await this.authService.register(dto);
+    return toUserResponseDto(account);
   }
 
   @Post('login')
   // NestJS defaults POST responses to 201 — login does not create a resource, it returns a token (200).
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: AuthLoginDto): Promise<AuthLoginResponseDto> {
-    return this.authService.login(dto);
+    const { accessToken, account } = await this.authService.login(dto);
+    return {
+      accessToken,
+      user: toUserResponseDto(account),
+    };
   }
 }
