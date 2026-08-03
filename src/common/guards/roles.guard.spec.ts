@@ -44,7 +44,7 @@ describe('RolesGuard', () => {
       guard.canActivate(
         createContext({
           sub: jwtSub,
-          role: Role.SUBCONTRACTOR,
+          role: Role.CUSTOMER,
         }),
       ),
     ).toBe(false);

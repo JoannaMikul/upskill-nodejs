@@ -18,17 +18,27 @@ async function main(): Promise<void> {
   const password = MANAGER_PASSWORD ?? DEFAULT_MANAGER_PASSWORD;
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-  const manager = await prisma.user.upsert({
-    where: { email },
-    update: {
-      passwordHash,
-      role: Role.MANAGER,
-    },
-    create: {
-      email,
-      passwordHash,
-      role: Role.MANAGER,
-    },
+  const manager = await prisma.$transaction(async (tx) => {
+    const account = await tx.account.upsert({
+      where: { email },
+      update: {
+        passwordHash,
+        role: Role.MANAGER,
+      },
+      create: {
+        email,
+        passwordHash,
+        role: Role.MANAGER,
+      },
+    });
+
+    await tx.manager.upsert({
+      where: { accountId: account.id },
+      update: {},
+      create: { accountId: account.id },
+    });
+
+    return account;
   });
 
   console.log(`Manager seeded: ${manager.email} (${manager.id})`);

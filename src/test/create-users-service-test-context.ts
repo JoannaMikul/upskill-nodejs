@@ -5,7 +5,7 @@ import { UsersService } from '../users/users.service';
 export type UsersServiceTestContext = {
   usersService: UsersService;
   prismaService: {
-    user: {
+    account: {
       findUnique: jest.Mock;
     };
   };
@@ -13,7 +13,7 @@ export type UsersServiceTestContext = {
 
 export async function createUsersServiceTestContext(): Promise<UsersServiceTestContext> {
   const prismaService = {
-    user: {
+    account: {
       findUnique: jest.fn(),
     },
   };

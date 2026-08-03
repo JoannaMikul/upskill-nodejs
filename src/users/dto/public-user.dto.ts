@@ -1,6 +1,6 @@
-import { User } from '@prisma/client';
+import { Account } from '@prisma/client';
 
 export type PublicUser = Pick<
-  User,
+  Account,
   'id' | 'email' | 'role' | 'createdAt' | 'updatedAt'
 >;

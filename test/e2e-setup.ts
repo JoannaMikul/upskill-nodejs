@@ -38,8 +38,8 @@ export interface AuthCredentials {
 
 export interface TestActors {
   managerToken: string;
-  subcontractor: RegisterResponseBody;
-  subcontractorToken: string;
+  customer: RegisterResponseBody;
+  customerToken: string;
 }
 
 export function authHeader(token: string): string {
@@ -72,19 +72,19 @@ export async function loginUser(
 
 export async function createTestActors(
   app: INestApplication,
-  subcontractorCredentials: AuthCredentials,
+  customerCredentials: AuthCredentials,
 ): Promise<TestActors> {
   const managerLogin = await loginUser(app, {
     email: MANAGER_EMAIL,
     password: MANAGER_PASSWORD,
   });
-  const subcontractor = await registerUser(app, subcontractorCredentials);
-  const subcontractorLogin = await loginUser(app, subcontractorCredentials);
+  const customer = await registerUser(app, customerCredentials);
+  const customerLogin = await loginUser(app, customerCredentials);
 
   return {
     managerToken: managerLogin.accessToken,
-    subcontractor,
-    subcontractorToken: subcontractorLogin.accessToken,
+    customer,
+    customerToken: customerLogin.accessToken,
   };
 }
 
@@ -141,22 +141,30 @@ export async function createE2eApp(): Promise<{
 export async function seedManager(prisma: PrismaService): Promise<void> {
   const passwordHash = await bcrypt.hash(MANAGER_PASSWORD, 12);
 
-  await prisma.user.upsert({
-    where: { email: MANAGER_EMAIL },
-    update: {
-      passwordHash,
-      role: Role.MANAGER,
-    },
-    create: {
-      email: MANAGER_EMAIL,
-      passwordHash,
-      role: Role.MANAGER,
-    },
+  await prisma.$transaction(async (tx) => {
+    const account = await tx.account.upsert({
+      where: { email: MANAGER_EMAIL },
+      update: {
+        passwordHash,
+        role: Role.MANAGER,
+      },
+      create: {
+        email: MANAGER_EMAIL,
+        passwordHash,
+        role: Role.MANAGER,
+      },
+    });
+
+    await tx.manager.upsert({
+      where: { accountId: account.id },
+      update: {},
+      create: { accountId: account.id },
+    });
   });
 }
 
 export async function cleanupTestUsers(prisma: PrismaService): Promise<void> {
-  await prisma.user.deleteMany({
+  await prisma.account.deleteMany({
     where: {
       email: {
         not: MANAGER_EMAIL,

@@ -8,9 +8,9 @@ import {
   TestActors,
 } from './e2e-setup';
 
-const subcontractorCredentials = {
-  email: 'subcontractor@example.com',
-  password: 'SubPass1234',
+const customerCredentials = {
+  email: 'customer@example.com',
+  password: 'CustomerPass1234',
 };
 
 describe('Users', () => {
@@ -18,19 +18,19 @@ describe('Users', () => {
   let actors: TestActors;
 
   beforeAll(async () => {
-    actors = await createTestActors(e2e.app, subcontractorCredentials);
+    actors = await createTestActors(e2e.app, customerCredentials);
   });
 
   it('returns 200 for GET /users/me with valid token', async () => {
     const response = await e2eRequest(e2e.app)
       .get('/users/me')
-      .set('Authorization', authHeader(actors.subcontractorToken))
+      .set('Authorization', authHeader(actors.customerToken))
       .expect(200);
 
     expect(response.body as RegisterResponseBody).toMatchObject({
-      id: actors.subcontractor.id,
-      email: subcontractorCredentials.email,
-      role: 'SUBCONTRACTOR',
+      id: actors.customer.id,
+      email: customerCredentials.email,
+      role: 'CUSTOMER',
     });
   });
 
@@ -44,35 +44,35 @@ describe('Users', () => {
 
   it('allows Manager to look up user by id', async () => {
     const response = await e2eRequest(e2e.app)
-      .get(`/users/${actors.subcontractor.id}`)
+      .get(`/users/${actors.customer.id}`)
       .set('Authorization', authHeader(actors.managerToken))
       .expect(200);
 
     expect(response.body as RegisterResponseBody).toMatchObject({
-      id: actors.subcontractor.id,
-      email: subcontractorCredentials.email,
-      role: 'SUBCONTRACTOR',
+      id: actors.customer.id,
+      email: customerCredentials.email,
+      role: 'CUSTOMER',
     });
   });
 
   it('allows Manager to look up user by email query param', async () => {
     const response = await e2eRequest(e2e.app)
       .get('/users')
-      .query({ email: subcontractorCredentials.email })
+      .query({ email: customerCredentials.email })
       .set('Authorization', authHeader(actors.managerToken))
       .expect(200);
 
     expect(response.body as RegisterResponseBody).toMatchObject({
-      id: actors.subcontractor.id,
-      email: subcontractorCredentials.email,
-      role: 'SUBCONTRACTOR',
+      id: actors.customer.id,
+      email: customerCredentials.email,
+      role: 'CUSTOMER',
     });
   });
 
-  it('returns 403 when Subcontractor looks up user by id', async () => {
+  it('returns 403 when Customer looks up user by id', async () => {
     const response = await e2eRequest(e2e.app)
-      .get(`/users/${actors.subcontractor.id}`)
-      .set('Authorization', authHeader(actors.subcontractorToken))
+      .get(`/users/${actors.customer.id}`)
+      .set('Authorization', authHeader(actors.customerToken))
       .expect(403);
 
     expect(response.body as ApiErrorResponseBody).toMatchObject({
@@ -80,11 +80,11 @@ describe('Users', () => {
     });
   });
 
-  it('returns 403 when Subcontractor looks up user by email', async () => {
+  it('returns 403 when Customer looks up user by email', async () => {
     const response = await e2eRequest(e2e.app)
       .get('/users')
-      .query({ email: subcontractorCredentials.email })
-      .set('Authorization', authHeader(actors.subcontractorToken))
+      .query({ email: customerCredentials.email })
+      .set('Authorization', authHeader(actors.customerToken))
       .expect(403);
 
     expect(response.body as ApiErrorResponseBody).toMatchObject({

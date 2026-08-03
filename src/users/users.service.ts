@@ -8,28 +8,28 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: string): Promise<PublicUser> {
-    const user = await this.prisma.user.findUnique({
+    const account = await this.prisma.account.findUnique({
       where: { id },
     });
 
-    if (!user) {
+    if (!account) {
       throw new NotFoundException('User not found');
     }
 
-    return toPublicUser(user);
+    return toPublicUser(account);
   }
 
   async findByEmail(email: string): Promise<PublicUser> {
     const formattedEmail = email.toLowerCase();
 
-    const user = await this.prisma.user.findUnique({
+    const account = await this.prisma.account.findUnique({
       where: { email: formattedEmail },
     });
 
-    if (!user) {
+    if (!account) {
       throw new NotFoundException('User not found');
     }
 
-    return toPublicUser(user);
+    return toPublicUser(account);
   }
 }

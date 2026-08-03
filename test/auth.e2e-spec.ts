@@ -8,25 +8,25 @@ import {
   setupE2eSuite,
 } from './e2e-setup';
 
-const subcontractor = {
-  email: 'subcontractor@example.com',
-  password: 'SubPass1234',
+const customer = {
+  email: 'customer@example.com',
+  password: 'CustomerPass1234',
 };
 
 describe('Auth', () => {
   const e2e = setupE2eSuite({ cleanupAfterEach: true });
 
-  it('registers a Subcontractor and returns 201 without access token', async () => {
+  it('registers a Customer and returns 201 without access token', async () => {
     const response = await e2eRequest(e2e.app)
       .post('/auth/register')
-      .send(subcontractor)
+      .send(customer)
       .expect(201);
 
     const body = response.body as RegisterResponseBody;
 
     expect(body).toMatchObject({
-      email: subcontractor.email,
-      role: 'SUBCONTRACTOR',
+      email: customer.email,
+      role: 'CUSTOMER',
     });
     expect(body).toHaveProperty('id');
     expect(body).not.toHaveProperty('passwordHash');
@@ -52,35 +52,29 @@ describe('Auth', () => {
     });
   });
 
-  it('logs in registered Subcontractor and returns JWT', async () => {
-    await e2eRequest(e2e.app)
-      .post('/auth/register')
-      .send(subcontractor)
-      .expect(201);
+  it('logs in registered Customer and returns JWT', async () => {
+    await e2eRequest(e2e.app).post('/auth/register').send(customer).expect(201);
 
     const response = await e2eRequest(e2e.app)
       .post('/auth/login')
-      .send(subcontractor)
+      .send(customer)
       .expect(200);
 
     const body = response.body as LoginResponseBody;
 
     expect(body).toHaveProperty('accessToken');
     expect(body.user).toMatchObject({
-      email: subcontractor.email,
-      role: 'SUBCONTRACTOR',
+      email: customer.email,
+      role: 'CUSTOMER',
     });
   });
 
   it('returns 409 when registering duplicate email', async () => {
-    await e2eRequest(e2e.app)
-      .post('/auth/register')
-      .send(subcontractor)
-      .expect(201);
+    await e2eRequest(e2e.app).post('/auth/register').send(customer).expect(201);
 
     const response = await e2eRequest(e2e.app)
       .post('/auth/register')
-      .send(subcontractor)
+      .send(customer)
       .expect(409);
 
     const body = response.body as ApiErrorResponseBody;
@@ -92,15 +86,12 @@ describe('Auth', () => {
   });
 
   it('returns 401 when login password is wrong', async () => {
-    await e2eRequest(e2e.app)
-      .post('/auth/register')
-      .send(subcontractor)
-      .expect(201);
+    await e2eRequest(e2e.app).post('/auth/register').send(customer).expect(201);
 
     const response = await e2eRequest(e2e.app)
       .post('/auth/login')
       .send({
-        email: subcontractor.email,
+        email: customer.email,
         password: 'WrongPassword123',
       })
       .expect(401);
