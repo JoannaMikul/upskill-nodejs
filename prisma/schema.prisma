@@ -12,6 +12,11 @@ enum Role {
   CUSTOMER
 }
 
+enum NotificationChannel {
+  EMAIL
+  SMS
+}
+
 model Account {
   id           String   @id @default(uuid())
   email        String
@@ -32,7 +37,9 @@ model Manager {
 }
 
 model Customer {
-  id        String  @id @default(uuid())
-  accountId String  @unique
-  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id                  String              @id @default(uuid())
+  accountId           String              @unique
+  account             Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  notificationChannel NotificationChannel @default(EMAIL)
+  phoneNumber         String?
 }
