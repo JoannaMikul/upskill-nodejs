@@ -1,49 +1,28 @@
 import { config } from 'dotenv';
-import { PrismaClient, Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { UsersService } from '../src/users/users.service';
 
 config();
-
-const BCRYPT_ROUNDS = 12;
 
 const DEFAULT_MANAGER_EMAIL = 'manager@example.com';
 const DEFAULT_MANAGER_PASSWORD = 'ManagerPass123';
 
 async function main(): Promise<void> {
-  const prisma = new PrismaClient();
+  const prisma = new PrismaService();
+  await prisma.onModuleInit();
 
-  const { MANAGER_EMAIL, MANAGER_PASSWORD } = process.env ?? {};
+  try {
+    const usersService = new UsersService(prisma);
+    const { MANAGER_EMAIL, MANAGER_PASSWORD } = process.env;
+    const email = (MANAGER_EMAIL ?? DEFAULT_MANAGER_EMAIL).toLowerCase();
+    const password = MANAGER_PASSWORD ?? DEFAULT_MANAGER_PASSWORD;
 
-  const email = (MANAGER_EMAIL ?? DEFAULT_MANAGER_EMAIL).toLowerCase();
-  const password = MANAGER_PASSWORD ?? DEFAULT_MANAGER_PASSWORD;
-  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const manager = await usersService.seedManager(email, password);
 
-  const manager = await prisma.$transaction(async (tx) => {
-    const account = await tx.account.upsert({
-      where: { email },
-      update: {
-        passwordHash,
-        role: Role.MANAGER,
-      },
-      create: {
-        email,
-        passwordHash,
-        role: Role.MANAGER,
-      },
-    });
-
-    await tx.manager.upsert({
-      where: { accountId: account.id },
-      update: {},
-      create: { accountId: account.id },
-    });
-
-    return account;
-  });
-
-  console.log(`Manager seeded: ${manager.email} (${manager.id})`);
-
-  await prisma.$disconnect();
+    console.log(`Manager seeded: ${manager.email} (${manager.id})`);
+  } finally {
+    await prisma.onModuleDestroy();
+  }
 }
 
 main().catch((error: unknown) => {

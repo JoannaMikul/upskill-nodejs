@@ -1,13 +1,12 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
 import supertest from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { AuthLoginResponseDto } from '../src/auth/dto/auth-login-response.dto';
 import { ErrorResponseDto } from '../src/common/filters/http-exception.filter';
 import { UserResponseDto } from '../src/users/dto/user-response.dto';
+import { UsersService } from '../src/users/users.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 const DEFAULT_MANAGER_EMAIL = 'manager@example.com';
@@ -98,7 +97,7 @@ export function setupE2eSuite(options: SetupE2eSuiteOptions = {}): E2eSuite {
     suite.app = created.app;
     suite.prisma = created.prisma;
     await cleanupTestUsers(suite.prisma);
-    await seedManager(suite.prisma);
+    await suite.app.get(UsersService).seedManager(MANAGER_EMAIL, MANAGER_PASSWORD);
   });
 
   if (options.cleanupAfterEach) {
@@ -129,31 +128,6 @@ export async function createE2eApp(): Promise<{
   const prisma = app.get(PrismaService);
 
   return { app, prisma };
-}
-
-export async function seedManager(prisma: PrismaService): Promise<void> {
-  const passwordHash = await bcrypt.hash(MANAGER_PASSWORD, 12);
-
-  await prisma.$transaction(async (tx) => {
-    const account = await tx.account.upsert({
-      where: { email: MANAGER_EMAIL },
-      update: {
-        passwordHash,
-        role: Role.MANAGER,
-      },
-      create: {
-        email: MANAGER_EMAIL,
-        passwordHash,
-        role: Role.MANAGER,
-      },
-    });
-
-    await tx.manager.upsert({
-      where: { accountId: account.id },
-      update: {},
-      create: { accountId: account.id },
-    });
-  });
 }
 
 export async function cleanupTestUsers(prisma: PrismaService): Promise<void> {

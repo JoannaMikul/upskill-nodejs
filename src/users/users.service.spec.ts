@@ -1,10 +1,13 @@
 import { NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import {
   createMockAccount,
   MOCK_ACCOUNT_ID,
 } from '../test/create-mock-account';
 import { createUsersServiceTestContext } from '../test/create-users-service-test-context';
+
+jest.mock('bcrypt');
 
 describe('UsersService', () => {
   describe('findById', () => {
@@ -60,6 +63,50 @@ describe('UsersService', () => {
       await expect(
         usersService.findByEmail('unknown@example.com'),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('seedManager', () => {
+    it('upserts manager account and linked manager profile', async () => {
+      const { usersService, prismaService } =
+        await createUsersServiceTestContext();
+      const mockAccount = createMockAccount({
+        role: Role.MANAGER,
+        email: 'manager@example.com',
+      });
+
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
+      prismaService.account.upsert.mockResolvedValue(mockAccount);
+      prismaService.manager.upsert.mockResolvedValue({
+        id: 'manager-profile-id',
+        accountId: mockAccount.id,
+      });
+
+      const result = await usersService.seedManager(
+        'Manager@Example.com',
+        'ManagerPass123',
+      );
+
+      expect(bcrypt.hash).toHaveBeenCalledWith('ManagerPass123', 12);
+      expect(prismaService.$transaction).toHaveBeenCalledTimes(1);
+      expect(prismaService.account.upsert).toHaveBeenCalledWith({
+        where: { email: 'manager@example.com' },
+        update: {
+          passwordHash: 'hashed-password',
+          role: Role.MANAGER,
+        },
+        create: {
+          email: 'manager@example.com',
+          passwordHash: 'hashed-password',
+          role: Role.MANAGER,
+        },
+      });
+      expect(prismaService.manager.upsert).toHaveBeenCalledWith({
+        where: { accountId: mockAccount.id },
+        update: {},
+        create: { accountId: mockAccount.id },
+      });
+      expect(result).toEqual(mockAccount);
     });
   });
 });
