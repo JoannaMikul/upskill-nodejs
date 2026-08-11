@@ -42,4 +42,25 @@ model Customer {
   account             Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
   notificationChannel NotificationChannel @default(EMAIL)
   phoneNumber         String?
+  invoices            Invoice[]
+  notifications       Notification[]
+}
+
+model Invoice {
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Notification {
+  id         String              @id @default(uuid())
+  customerId String
+  customer   Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  channel    NotificationChannel
+  recipient  String
+  subject    String
+  body       String
+  sentAt     DateTime            @default(now())
 }
