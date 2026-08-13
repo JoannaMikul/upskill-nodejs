@@ -22,6 +22,7 @@ describe('UsersService', () => {
 
       expect(prismaService.account.findUnique).toHaveBeenCalledWith({
         where: { id: MOCK_ACCOUNT_ID },
+        include: { customer: true },
       });
       expect(result).toEqual(mockAccount);
     });

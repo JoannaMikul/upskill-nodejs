@@ -97,7 +97,9 @@ export function setupE2eSuite(options: SetupE2eSuiteOptions = {}): E2eSuite {
     suite.app = created.app;
     suite.prisma = created.prisma;
     await cleanupTestUsers(suite.prisma);
-    await suite.app.get(UsersService).seedManager(MANAGER_EMAIL, MANAGER_PASSWORD);
+    await suite.app
+      .get(UsersService)
+      .seedManager(MANAGER_EMAIL, MANAGER_PASSWORD);
   });
 
   if (options.cleanupAfterEach) {

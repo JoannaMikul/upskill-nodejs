@@ -1,11 +1,21 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 import { UserByEmailQueryDto } from './dto/user-by-email-query.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { mapUpdateNotificationPreferencesDtoToInput } from './mappers/update-notification-preferences.mapper';
 import { toUserResponseDto } from './mappers/user-response.mapper';
 import type { AuthenticatedUser } from '../common/types/authenticated-user.interface';
 import { UsersService } from './users.service';
@@ -20,6 +30,20 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserResponseDto> {
     const account = await this.usersService.findById(user.sub);
+    return toUserResponseDto(account);
+  }
+
+  @Patch('me/notification-preferences')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.CUSTOMER)
+  async updateNotificationPreferences(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateNotificationPreferencesDto,
+  ): Promise<UserResponseDto> {
+    const account = await this.usersService.updateNotificationPreferences(
+      user.sub,
+      mapUpdateNotificationPreferencesDtoToInput(dto),
+    );
     return toUserResponseDto(account);
   }
 

@@ -1,8 +1,22 @@
-import { Account } from '@prisma/client';
+import { Account, Customer } from '@prisma/client';
 import { UserResponseDto } from '../dto/user-response.dto';
 
-export function toUserResponseDto(account: Account): UserResponseDto {
+type AccountWithCustomer = Account & {
+  customer?: Pick<Customer, 'notificationChannel' | 'phoneNumber'> | null;
+};
+
+export function toUserResponseDto(
+  account: AccountWithCustomer,
+): UserResponseDto {
   // Whitelist public fields only — never expose passwordHash in API responses.
-  const { id, email, role, createdAt, updatedAt } = account;
-  return { id, email, role, createdAt, updatedAt };
+  const { id, email, role, createdAt, updatedAt, customer } = account;
+  return {
+    id,
+    email,
+    role,
+    createdAt,
+    updatedAt,
+    notificationChannel: customer?.notificationChannel ?? null,
+    phoneNumber: customer?.phoneNumber ?? null,
+  };
 }
