@@ -132,7 +132,31 @@ export async function createE2eApp(): Promise<{
   return { app, prisma };
 }
 
+export async function cleanupTestInvoicesAndNotifications(
+  prisma: PrismaService,
+): Promise<void> {
+  const testCustomerFilter = {
+    customer: {
+      account: {
+        email: {
+          not: MANAGER_EMAIL,
+        },
+      },
+    },
+  };
+
+  await prisma.notification.deleteMany({
+    where: testCustomerFilter,
+  });
+
+  await prisma.invoice.deleteMany({
+    where: testCustomerFilter,
+  });
+}
+
 export async function cleanupTestUsers(prisma: PrismaService): Promise<void> {
+  await cleanupTestInvoicesAndNotifications(prisma);
+
   await prisma.account.deleteMany({
     where: {
       email: {
