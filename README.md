@@ -1,6 +1,6 @@
 # Invoice Management Platform
 
-NestJS 11 REST API for user management with JWT authentication and role-based access (`MANAGER`, `CUSTOMER`). Training project: PostgreSQL via Prisma, validation with Zod, tests with Jest.
+NestJS 11 REST API for user management, monthly invoice submission, and automated reminders. JWT authentication with role-based access (`MANAGER`, `CUSTOMER`). Training project: PostgreSQL via Prisma, validation with Zod, scheduled jobs with `@nestjs/schedule`, tests with Jest.
 
 ## Requirements
 
@@ -37,13 +37,22 @@ Sprint 1 uses short-lived access tokens only — no refresh tokens.
 
 ## Data model
 
-| Entity    | Description                                           |
-| --------- | ----------------------------------------------------- |
-| `Account` | Login identity: email (unique), password hash, role   |
-| `Manager` | 1:1 profile for Manager accounts (seeded, not public) |
-| `Customer`| 1:1 profile created when a Customer registers         |
+| Entity         | Description                                                                 |
+| -------------- | --------------------------------------------------------------------------- |
+| `Account`      | Login identity: email (unique), password hash, role                         |
+| `Manager`      | 1:1 profile for Manager accounts (seeded, not public)                       |
+| `Customer`     | 1:1 profile created when a Customer registers; notification preferences   |
+| `Invoice`      | Monthly invoice record linked to a Customer (`createdAt` = submission time) |
+| `Notification` | Log of sent reminders (channel, recipient, subject, body, `sentAt`)         |
 
-Registration creates an `Account` with role `CUSTOMER` and a linked `Customer` record. The seeded Manager has role `MANAGER` and a linked `Manager` record.
+Registration creates an `Account` with role `CUSTOMER` and a linked `Customer` record (default notification channel: `EMAIL`). The seeded Manager has role `MANAGER` and a linked `Manager` record.
+
+Each `Customer` has:
+
+- `notificationChannel` — `EMAIL` or `SMS` (default `EMAIL`)
+- `phoneNumber` — required when channel is `SMS`
+
+A Customer **has submitted an invoice** for a calendar month when an `Invoice` exists with `createdAt` in that month.
 
 ## Seeded Manager account
 
@@ -58,13 +67,26 @@ Override with `MANAGER_EMAIL` and `MANAGER_PASSWORD` in `.env` before seeding.
 
 ## API endpoints
 
-All responses for user objects omit `passwordHash`:
+All responses for user objects omit `passwordHash`. Customer profiles include notification preferences; Manager profiles return `null` for those fields:
 
 ```json
 {
   "id": "uuid",
   "email": "user@example.com",
   "role": "CUSTOMER",
+  "notificationChannel": "EMAIL",
+  "phoneNumber": null,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+Invoice responses:
+
+```json
+{
+  "id": "uuid",
+  "customerId": "uuid",
   "createdAt": "2026-01-01T00:00:00.000Z",
   "updatedAt": "2026-01-01T00:00:00.000Z"
 }
@@ -100,10 +122,24 @@ curl http://localhost:3000/users/me \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-- **200** — current user profile
+- **200** — current user profile (includes `notificationChannel` and `phoneNumber` for Customers)
 - **401** — missing or invalid token
 
-### 4. Get user by ID (Manager only)
+### 4. Update notification preferences (Customer only)
+
+```bash
+curl -X PATCH http://localhost:3000/users/me/notification-preferences \
+  -H "Authorization: Bearer <customerAccessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"notificationChannel":"SMS","phoneNumber":"+48123456789"}'
+```
+
+- **200** — updated user profile
+- **400** — validation error (`phoneNumber` required when channel is `SMS`)
+- **401** — missing or invalid token
+- **403** — Manager token
+
+### 5. Get user by ID (Manager only)
 
 ```bash
 curl http://localhost:3000/users/<user-id> \
@@ -114,7 +150,7 @@ curl http://localhost:3000/users/<user-id> \
 - **403** — Customer token
 - **404** — user not found
 
-### 5. Get user by email (Manager only)
+### 6. Get user by email (Manager only)
 
 ```bash
 curl "http://localhost:3000/users?email=customer@example.com" \
@@ -124,6 +160,45 @@ curl "http://localhost:3000/users?email=customer@example.com" \
 - **200** — user profile (exact email match, case-insensitive)
 - **403** — Customer token
 - **404** — user not found
+
+### 7. Submit invoice (Customer only)
+
+```bash
+curl -X POST http://localhost:3000/invoices \
+  -H "Authorization: Bearer <customerAccessToken>"
+```
+
+- **201** — created invoice
+- **401** — missing or invalid token
+- **403** — Manager token
+- **404** — Customer profile not found
+
+### 8. List my invoices (Customer only)
+
+```bash
+curl http://localhost:3000/invoices/me \
+  -H "Authorization: Bearer <customerAccessToken>"
+```
+
+- **200** — array of invoices for the authenticated Customer
+- **401** — missing or invalid token
+- **403** — Manager token
+
+## Invoice reminder cron
+
+A scheduled job runs **every day at 09:00** (`@Cron('0 9 * * *')`). On the **third-to-last day of the month** (e.g. 28 Jan, 25 Feb 2026, 27 Apr), it:
+
+1. Finds Customers with **no invoice** in the current calendar month (`Invoice.createdAt`).
+2. Sends a reminder via the Customer's preferred channel (`EMAIL` or `SMS`).
+3. Persists each sent notification in the `Notification` table.
+
+Outbound email and SMS are **stubbed** — messages are logged to the console instead of sent to real recipients.
+
+Reminder message (EN):
+
+> Reminder: you have not submitted an invoice for {Month YYYY}. Please submit it before month end.
+
+Logic lives in `src/cron/` (`CronService` → `InvoiceReminderService` → `NotificationHandler`). Notifications use hexagonal architecture under `src/notifications/` (ports + adapters).
 
 ## Scripts
 
@@ -147,18 +222,21 @@ pnpm test
 pnpm test:e2e
 ```
 
-E2e tests use the database from `DATABASE_URL`. They seed the Manager via `UsersService.seedManager()` and clean up test users between runs.
+E2e tests use the database from `DATABASE_URL`. They seed the Manager via `UsersService.seedManager()` and clean up test users, invoices, and notifications between runs.
 
 ## Project structure
 
 ```
 src/
-  auth/       # register, login, JWT strategy
-  users/      # profile, Manager lookups, seedManager()
-  common/     # guards, decorators, filters, shared types
-  prisma/     # PrismaModule (global)
+  auth/           # register, login, JWT strategy
+  users/          # profile, notification preferences, Manager lookups, seedManager()
+  invoices/       # submit and list invoices, query for reminder cron
+  notifications/  # hexagonal module: ports, adapters, NotificationHandler
+  cron/           # scheduled invoice reminders (@nestjs/schedule)
+  common/         # guards, decorators, filters, shared types
+  prisma/         # PrismaModule (global)
 prisma/
   schema.prisma
   seed.ts
-test/         # e2e specs
+test/             # e2e specs (auth, users, notifications)
 ```
