@@ -1,6 +1,6 @@
 # Invoice Management Platform
 
-NestJS 11 REST API for user management with JWT authentication and role-based access (`MANAGER`, `SUBCONTRACTOR`). Training project: PostgreSQL via Prisma, validation with Zod, tests with Jest.
+NestJS 11 REST API for user management with JWT authentication and role-based access (`MANAGER`, `CUSTOMER`). Training project: PostgreSQL via Prisma, validation with Zod, tests with Jest.
 
 ## Requirements
 
@@ -35,9 +35,19 @@ The API listens on `http://localhost:3000` by default (`PORT` env var).
 
 Sprint 1 uses short-lived access tokens only — no refresh tokens.
 
+## Data model
+
+| Entity    | Description                                           |
+| --------- | ----------------------------------------------------- |
+| `Account` | Login identity: email (unique), password hash, role   |
+| `Manager` | 1:1 profile for Manager accounts (seeded, not public) |
+| `Customer`| 1:1 profile created when a Customer registers         |
+
+Registration creates an `Account` with role `CUSTOMER` and a linked `Customer` record. The seeded Manager has role `MANAGER` and a linked `Manager` record.
+
 ## Seeded Manager account
 
-After `pnpm prisma:seed`, one Manager exists in the database (created via seed, not registration):
+After `pnpm prisma:seed`, one Manager exists in the database (created via `UsersService.seedManager()`, not registration):
 
 | Field    | Default value         |
 | -------- | --------------------- |
@@ -54,21 +64,21 @@ All responses for user objects omit `passwordHash`:
 {
   "id": "uuid",
   "email": "user@example.com",
-  "role": "SUBCONTRACTOR",
+  "role": "CUSTOMER",
   "createdAt": "2026-01-01T00:00:00.000Z",
   "updatedAt": "2026-01-01T00:00:00.000Z"
 }
 ```
 
-### 1. Register Subcontractor
+### 1. Register Customer
 
 ```bash
 curl -X POST http://localhost:3000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"sub@example.com","password":"password123"}'
+  -d '{"email":"customer@example.com","password":"password123"}'
 ```
 
-- **201** — returns user (no JWT)
+- **201** — returns user (no JWT); creates `Account` + `Customer`
 - **409** — email already taken
 - **400** — validation error (invalid email or password shorter than 8 characters)
 
@@ -101,18 +111,18 @@ curl http://localhost:3000/users/<user-id> \
 ```
 
 - **200** — user profile
-- **403** — Subcontractor token
+- **403** — Customer token
 - **404** — user not found
 
 ### 5. Get user by email (Manager only)
 
 ```bash
-curl "http://localhost:3000/users?email=sub@example.com" \
+curl "http://localhost:3000/users?email=customer@example.com" \
   -H "Authorization: Bearer <managerAccessToken>"
 ```
 
 - **200** — user profile (exact email match, case-insensitive)
-- **403** — Subcontractor token
+- **403** — Customer token
 - **404** — user not found
 
 ## Scripts
@@ -137,14 +147,14 @@ pnpm test
 pnpm test:e2e
 ```
 
-E2e tests use the database from `DATABASE_URL`. They migrate, seed the Manager, and clean up test users between runs.
+E2e tests use the database from `DATABASE_URL`. They seed the Manager via `UsersService.seedManager()` and clean up test users between runs.
 
 ## Project structure
 
 ```
 src/
   auth/       # register, login, JWT strategy
-  users/      # profile and Manager lookups
+  users/      # profile, Manager lookups, seedManager()
   common/     # guards, decorators, filters, shared types
   prisma/     # PrismaModule (global)
 prisma/

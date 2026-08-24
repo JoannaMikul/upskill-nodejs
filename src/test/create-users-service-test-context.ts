@@ -5,18 +5,32 @@ import { UsersService } from '../users/users.service';
 export type UsersServiceTestContext = {
   usersService: UsersService;
   prismaService: {
-    user: {
+    account: {
       findUnique: jest.Mock;
+      upsert: jest.Mock;
     };
+    manager: {
+      upsert: jest.Mock;
+    };
+    $transaction: jest.Mock;
   };
 };
 
 export async function createUsersServiceTestContext(): Promise<UsersServiceTestContext> {
   const prismaService = {
-    user: {
+    account: {
       findUnique: jest.fn(),
+      upsert: jest.fn(),
     },
+    manager: {
+      upsert: jest.fn(),
+    },
+    $transaction: jest.fn(),
   };
+
+  prismaService.$transaction.mockImplementation(
+    (callback: (tx: typeof prismaService) => unknown) => callback(prismaService),
+  );
 
   const module: TestingModule = await Test.createTestingModule({
     providers: [

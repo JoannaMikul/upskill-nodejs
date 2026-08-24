@@ -1,32 +1,32 @@
 import {
-  ApiErrorResponseBody,
+  AuthLoginResponseDto,
   e2eRequest,
-  LoginResponseBody,
+  ErrorResponseDto,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
-  RegisterResponseBody,
   setupE2eSuite,
+  UserResponseDto,
 } from './e2e-setup';
 
-const subcontractor = {
-  email: 'subcontractor@example.com',
-  password: 'SubPass1234',
+const customer = {
+  email: 'customer@example.com',
+  password: 'CustomerPass1234',
 };
 
 describe('Auth', () => {
   const e2e = setupE2eSuite({ cleanupAfterEach: true });
 
-  it('registers a Subcontractor and returns 201 without access token', async () => {
+  it('registers a Customer and returns 201 without access token', async () => {
     const response = await e2eRequest(e2e.app)
       .post('/auth/register')
-      .send(subcontractor)
+      .send(customer)
       .expect(201);
 
-    const body = response.body as RegisterResponseBody;
+    const body = response.body as UserResponseDto;
 
     expect(body).toMatchObject({
-      email: subcontractor.email,
-      role: 'SUBCONTRACTOR',
+      email: customer.email,
+      role: 'CUSTOMER',
     });
     expect(body).toHaveProperty('id');
     expect(body).not.toHaveProperty('passwordHash');
@@ -42,7 +42,7 @@ describe('Auth', () => {
       })
       .expect(200);
 
-    const body = response.body as LoginResponseBody;
+    const body = response.body as AuthLoginResponseDto;
 
     expect(body).toHaveProperty('accessToken');
     expect(typeof body.accessToken).toBe('string');
@@ -52,38 +52,32 @@ describe('Auth', () => {
     });
   });
 
-  it('logs in registered Subcontractor and returns JWT', async () => {
-    await e2eRequest(e2e.app)
-      .post('/auth/register')
-      .send(subcontractor)
-      .expect(201);
+  it('logs in registered Customer and returns JWT', async () => {
+    await e2eRequest(e2e.app).post('/auth/register').send(customer).expect(201);
 
     const response = await e2eRequest(e2e.app)
       .post('/auth/login')
-      .send(subcontractor)
+      .send(customer)
       .expect(200);
 
-    const body = response.body as LoginResponseBody;
+    const body = response.body as AuthLoginResponseDto;
 
     expect(body).toHaveProperty('accessToken');
     expect(body.user).toMatchObject({
-      email: subcontractor.email,
-      role: 'SUBCONTRACTOR',
+      email: customer.email,
+      role: 'CUSTOMER',
     });
   });
 
   it('returns 409 when registering duplicate email', async () => {
-    await e2eRequest(e2e.app)
-      .post('/auth/register')
-      .send(subcontractor)
-      .expect(201);
+    await e2eRequest(e2e.app).post('/auth/register').send(customer).expect(201);
 
     const response = await e2eRequest(e2e.app)
       .post('/auth/register')
-      .send(subcontractor)
+      .send(customer)
       .expect(409);
 
-    const body = response.body as ApiErrorResponseBody;
+    const body = response.body as ErrorResponseDto;
 
     expect(body).toMatchObject({
       statusCode: 409,
@@ -92,20 +86,17 @@ describe('Auth', () => {
   });
 
   it('returns 401 when login password is wrong', async () => {
-    await e2eRequest(e2e.app)
-      .post('/auth/register')
-      .send(subcontractor)
-      .expect(201);
+    await e2eRequest(e2e.app).post('/auth/register').send(customer).expect(201);
 
     const response = await e2eRequest(e2e.app)
       .post('/auth/login')
       .send({
-        email: subcontractor.email,
+        email: customer.email,
         password: 'WrongPassword123',
       })
       .expect(401);
 
-    const body = response.body as ApiErrorResponseBody;
+    const body = response.body as ErrorResponseDto;
 
     expect(body).toMatchObject({
       statusCode: 401,

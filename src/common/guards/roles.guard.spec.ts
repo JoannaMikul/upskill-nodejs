@@ -1,16 +1,15 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Role } from '@prisma/client';
+import type { JwtPayload } from '../types/authenticated-user.interface';
 import { RolesGuard } from './roles.guard';
 
 describe('RolesGuard', () => {
   const reflector = new Reflector();
   const guard = new RolesGuard(reflector);
+  const jwtSub = '550e8400-e29b-41d4-a716-446655440000';
 
-  const createContext = (user?: {
-    sub: string;
-    role: Role;
-  }): ExecutionContext =>
+  const createContext = (user?: JwtPayload): ExecutionContext =>
     ({
       getHandler: () => ({}),
       getClass: () => ({}),
@@ -29,7 +28,12 @@ describe('RolesGuard', () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.MANAGER]);
 
     expect(
-      guard.canActivate(createContext({ sub: 'user-id', role: Role.MANAGER })),
+      guard.canActivate(
+        createContext({
+          sub: jwtSub,
+          role: Role.MANAGER,
+        }),
+      ),
     ).toBe(true);
   });
 
@@ -38,7 +42,10 @@ describe('RolesGuard', () => {
 
     expect(
       guard.canActivate(
-        createContext({ sub: 'user-id', role: Role.SUBCONTRACTOR }),
+        createContext({
+          sub: jwtSub,
+          role: Role.CUSTOMER,
+        }),
       ),
     ).toBe(false);
   });

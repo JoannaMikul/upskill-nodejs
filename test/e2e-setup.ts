@@ -1,12 +1,12 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
 import supertest from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
-import { ErrorResponseBody } from '../src/common/filters/http-exception.filter';
-import { PublicUser } from '../src/users/dto/public-user.dto';
+import { AuthLoginResponseDto } from '../src/auth/dto/auth-login-response.dto';
+import { ErrorResponseDto } from '../src/common/filters/http-exception.filter';
+import { UserResponseDto } from '../src/users/dto/user-response.dto';
+import { UsersService } from '../src/users/users.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 const DEFAULT_MANAGER_EMAIL = 'manager@example.com';
@@ -17,14 +17,6 @@ export const MANAGER_EMAIL = (
 ).toLowerCase();
 export const MANAGER_PASSWORD =
   process.env.MANAGER_PASSWORD ?? DEFAULT_MANAGER_PASSWORD;
-
-export interface LoginResponseBody {
-  accessToken: string;
-  user: PublicUser;
-}
-
-export type RegisterResponseBody = PublicUser;
-export type ApiErrorResponseBody = ErrorResponseBody;
 
 export function e2eRequest(app: INestApplication) {
   const server = app.getHttpServer() as App;
@@ -38,8 +30,8 @@ export interface AuthCredentials {
 
 export interface TestActors {
   managerToken: string;
-  subcontractor: RegisterResponseBody;
-  subcontractorToken: string;
+  customer: UserResponseDto;
+  customerToken: string;
 }
 
 export function authHeader(token: string): string {
@@ -49,42 +41,42 @@ export function authHeader(token: string): string {
 export async function registerUser(
   app: INestApplication,
   credentials: AuthCredentials,
-): Promise<RegisterResponseBody> {
+): Promise<UserResponseDto> {
   const response = await e2eRequest(app)
     .post('/auth/register')
     .send(credentials)
     .expect(201);
 
-  return response.body as RegisterResponseBody;
+  return response.body as UserResponseDto;
 }
 
 export async function loginUser(
   app: INestApplication,
   credentials: AuthCredentials,
-): Promise<LoginResponseBody> {
+): Promise<AuthLoginResponseDto> {
   const response = await e2eRequest(app)
     .post('/auth/login')
     .send(credentials)
     .expect(200);
 
-  return response.body as LoginResponseBody;
+  return response.body as AuthLoginResponseDto;
 }
 
 export async function createTestActors(
   app: INestApplication,
-  subcontractorCredentials: AuthCredentials,
+  customerCredentials: AuthCredentials,
 ): Promise<TestActors> {
   const managerLogin = await loginUser(app, {
     email: MANAGER_EMAIL,
     password: MANAGER_PASSWORD,
   });
-  const subcontractor = await registerUser(app, subcontractorCredentials);
-  const subcontractorLogin = await loginUser(app, subcontractorCredentials);
+  const customer = await registerUser(app, customerCredentials);
+  const customerLogin = await loginUser(app, customerCredentials);
 
   return {
     managerToken: managerLogin.accessToken,
-    subcontractor,
-    subcontractorToken: subcontractorLogin.accessToken,
+    customer,
+    customerToken: customerLogin.accessToken,
   };
 }
 
@@ -105,7 +97,7 @@ export function setupE2eSuite(options: SetupE2eSuiteOptions = {}): E2eSuite {
     suite.app = created.app;
     suite.prisma = created.prisma;
     await cleanupTestUsers(suite.prisma);
-    await seedManager(suite.prisma);
+    await suite.app.get(UsersService).seedManager(MANAGER_EMAIL, MANAGER_PASSWORD);
   });
 
   if (options.cleanupAfterEach) {
@@ -138,25 +130,8 @@ export async function createE2eApp(): Promise<{
   return { app, prisma };
 }
 
-export async function seedManager(prisma: PrismaService): Promise<void> {
-  const passwordHash = await bcrypt.hash(MANAGER_PASSWORD, 12);
-
-  await prisma.user.upsert({
-    where: { email: MANAGER_EMAIL },
-    update: {
-      passwordHash,
-      role: Role.MANAGER,
-    },
-    create: {
-      email: MANAGER_EMAIL,
-      passwordHash,
-      role: Role.MANAGER,
-    },
-  });
-}
-
 export async function cleanupTestUsers(prisma: PrismaService): Promise<void> {
-  await prisma.user.deleteMany({
+  await prisma.account.deleteMany({
     where: {
       email: {
         not: MANAGER_EMAIL,
@@ -164,3 +139,5 @@ export async function cleanupTestUsers(prisma: PrismaService): Promise<void> {
     },
   });
 }
+
+export type { AuthLoginResponseDto, ErrorResponseDto, UserResponseDto };

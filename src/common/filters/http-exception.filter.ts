@@ -13,7 +13,7 @@ export interface FieldError {
   message: string;
 }
 
-export interface ErrorResponseBody {
+export interface ErrorResponseDto {
   statusCode: number;
   message: string;
   errors: FieldError[];
@@ -32,7 +32,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
   private buildErrorResponse(
     exception: HttpException,
     status: number,
-  ): ErrorResponseBody {
+  ): ErrorResponseDto {
     if (exception instanceof ZodValidationException) {
       return {
         statusCode: status,

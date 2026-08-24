@@ -4,14 +4,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { User } from '@prisma/client';
+import { Account } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { PublicUser } from '../users/dto/public-user.dto';
-import { mapToCreateUserInput } from '../users/mappers/create-user.mapper';
-import { toPublicUser } from '../users/mappers/user.mapper';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import { mapRegisterDtoToCredentials } from './mappers/register.mapper';
+import { mapToCreateAccountInput } from '../users/mappers/create-account.mapper';
+import { AuthLoginDto } from './dto/auth-login.dto';
+import { RegisterCustomerDto } from './dto/register-customer.dto';
+import { mapRegisterCustomerDtoToInput } from './mappers/register-customer.mapper';
 import { JwtPayload } from '../common/types/authenticated-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -24,65 +22,67 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<PublicUser> {
-    const credentials = mapRegisterDtoToCredentials(dto);
+  async register(dto: RegisterCustomerDto): Promise<Account> {
+    const credentials = mapRegisterCustomerDtoToInput(dto);
 
-    const existingUser = await this.prisma.user.findUnique({
+    const existingAccount = await this.prisma.account.findUnique({
       where: { email: credentials.email },
     });
 
-    if (existingUser) {
+    if (existingAccount) {
       throw new ConflictException('Email already registered');
     }
 
     const passwordHash = await bcrypt.hash(credentials.password, BCRYPT_ROUNDS);
 
-    const createUserInput = mapToCreateUserInput(
+    const createAccountInput = mapToCreateAccountInput(
       credentials.email,
       passwordHash,
     );
 
-    const user = await this.prisma.user.create({
-      data: createUserInput,
-    });
-
-    return toPublicUser(user);
+    return this.prisma.$transaction((tx) =>
+      tx.account.create({
+        data: {
+          ...createAccountInput,
+          customer: {
+            create: {},
+          },
+        },
+      }),
+    );
   }
 
   async login(
-    dto: LoginDto,
-  ): Promise<{ accessToken: string; user: PublicUser }> {
+    dto: AuthLoginDto,
+  ): Promise<{ accessToken: string; account: Account }> {
     const email = dto.email.toLowerCase();
 
-    const user = await this.prisma.user.findUnique({
+    const account = await this.prisma.account.findUnique({
       where: { email },
     });
 
-    if (!user) {
+    if (!account) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
     const isPasswordValid = await bcrypt.compare(
       dto.password,
-      user.passwordHash,
+      account.passwordHash,
     );
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const accessToken = this.signToken(user);
+    const accessToken = this.signToken(account);
 
-    return {
-      accessToken,
-      user: toPublicUser(user),
-    };
+    return { accessToken, account };
   }
 
-  signToken(user: Pick<User, 'id' | 'role'>): string {
+  signToken(account: Pick<Account, 'id' | 'role'>): string {
     const payload: JwtPayload = {
-      sub: user.id,
-      role: user.role,
+      sub: account.id,
+      role: account.role,
     };
 
     return this.jwtService.sign(payload);

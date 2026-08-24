@@ -1,6 +1,6 @@
 import { Role } from '@prisma/client';
 
-export type CreateUserInput = {
+export type CreateAccountInput = {
   email: string;
   passwordHash: string;
   role: Role;
