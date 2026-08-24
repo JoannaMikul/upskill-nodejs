@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Account, Role } from '@prisma/client';
+import { Account, NotificationChannel, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { UpdateNotificationPreferencesInput } from './model/update-notification-preferences.input';
 import { PrismaService } from '../prisma/prisma.service';
 
 const BCRYPT_ROUNDS = 12;
@@ -12,6 +13,7 @@ export class UsersService {
   async findById(id: string): Promise<Account> {
     const account = await this.prisma.account.findUnique({
       where: { id },
+      include: { customer: true },
     });
 
     if (!account) {
@@ -19,6 +21,40 @@ export class UsersService {
     }
 
     return account;
+  }
+
+  async updateNotificationPreferences(
+    accountId: string,
+    input: UpdateNotificationPreferencesInput,
+  ): Promise<Account> {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      include: { customer: true },
+    });
+
+    if (!account) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!account.customer) {
+      throw new NotFoundException('Customer profile not found');
+    }
+
+    await this.prisma.customer.update({
+      where: { accountId },
+      data: {
+        notificationChannel: input.notificationChannel,
+        phoneNumber:
+          input.notificationChannel === NotificationChannel.SMS
+            ? input.phoneNumber
+            : null,
+      },
+    });
+
+    return this.prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      include: { customer: true },
+    });
   }
 
   async findByEmail(email: string): Promise<Account> {

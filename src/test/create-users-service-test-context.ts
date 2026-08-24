@@ -29,7 +29,8 @@ export async function createUsersServiceTestContext(): Promise<UsersServiceTestC
   };
 
   prismaService.$transaction.mockImplementation(
-    (callback: (tx: typeof prismaService) => unknown) => callback(prismaService),
+    (callback: (tx: typeof prismaService) => unknown) =>
+      callback(prismaService),
   );
 
   const module: TestingModule = await Test.createTestingModule({

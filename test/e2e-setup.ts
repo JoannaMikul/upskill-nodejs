@@ -97,7 +97,9 @@ export function setupE2eSuite(options: SetupE2eSuiteOptions = {}): E2eSuite {
     suite.app = created.app;
     suite.prisma = created.prisma;
     await cleanupTestUsers(suite.prisma);
-    await suite.app.get(UsersService).seedManager(MANAGER_EMAIL, MANAGER_PASSWORD);
+    await suite.app
+      .get(UsersService)
+      .seedManager(MANAGER_EMAIL, MANAGER_PASSWORD);
   });
 
   if (options.cleanupAfterEach) {
@@ -130,7 +132,31 @@ export async function createE2eApp(): Promise<{
   return { app, prisma };
 }
 
+export async function cleanupTestInvoicesAndNotifications(
+  prisma: PrismaService,
+): Promise<void> {
+  const testCustomerFilter = {
+    customer: {
+      account: {
+        email: {
+          not: MANAGER_EMAIL,
+        },
+      },
+    },
+  };
+
+  await prisma.notification.deleteMany({
+    where: testCustomerFilter,
+  });
+
+  await prisma.invoice.deleteMany({
+    where: testCustomerFilter,
+  });
+}
+
 export async function cleanupTestUsers(prisma: PrismaService): Promise<void> {
+  await cleanupTestInvoicesAndNotifications(prisma);
+
   await prisma.account.deleteMany({
     where: {
       email: {
