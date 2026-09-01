@@ -1,4 +1,4 @@
-import { NotificationChannel } from '@prisma/client';
+import type { NotificationChannel } from '@prisma/client';
 
 export type OutboundNotification = {
   customerId: string;

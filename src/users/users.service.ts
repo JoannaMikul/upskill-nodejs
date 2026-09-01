@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Account, NotificationChannel, Role } from '@prisma/client';
+import type { Account } from '@prisma/client';
+import { NotificationChannel, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { UpdateNotificationPreferencesInput } from './model/update-notification-preferences.input';
 import { PrismaService } from '../prisma/prisma.service';

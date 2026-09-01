@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { OutboundNotification } from '../model/outbound-notification';
+import type { OutboundNotification } from '../model/outbound-notification';
 import type { NotificationRepository } from '../ports/notification-repository.port';
 import type { NotificationSenderFactory } from '../ports/notification-sender-factory.port';
 import {

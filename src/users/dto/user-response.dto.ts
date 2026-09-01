@@ -1,4 +1,4 @@
-import { Account, NotificationChannel } from '@prisma/client';
+import type { Account, NotificationChannel } from '@prisma/client';
 
 export type UserResponseDto = Pick<
   Account,

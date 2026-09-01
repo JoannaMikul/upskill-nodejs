@@ -1,4 +1,4 @@
-import { Invoice } from '@prisma/client';
+import type { Invoice } from '@prisma/client';
 
 export type InvoiceResponseDto = Pick<
   Invoice,

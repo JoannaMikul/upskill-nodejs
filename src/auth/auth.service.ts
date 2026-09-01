@@ -4,13 +4,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Account } from '@prisma/client';
+import type { Account } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { mapToCreateAccountInput } from '../users/mappers/create-account.mapper';
 import { AuthLoginDto } from './dto/auth-login.dto';
 import { RegisterCustomerDto } from './dto/register-customer.dto';
 import { mapRegisterCustomerDtoToInput } from './mappers/register-customer.mapper';
-import { JwtPayload } from '../common/types/authenticated-user.interface';
+import type { JwtPayload } from '../common/types/authenticated-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 
 const BCRYPT_ROUNDS = 12;

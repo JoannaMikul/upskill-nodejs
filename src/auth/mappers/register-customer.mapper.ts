@@ -1,5 +1,5 @@
-import { RegisterCustomerDto } from '../dto/register-customer.dto';
-import { RegisterCustomerInput } from '../model/register-customer.input';
+import type { RegisterCustomerDto } from '../dto/register-customer.dto';
+import type { RegisterCustomerInput } from '../model/register-customer.input';
 
 export function mapRegisterCustomerDtoToInput(
   dto: RegisterCustomerDto,

@@ -1,5 +1,5 @@
 import { NotificationChannel } from '@prisma/client';
-import { OutboundNotification } from '../model/outbound-notification';
+import type { OutboundNotification } from '../model/outbound-notification';
 import type { NotificationRepository } from '../ports/notification-repository.port';
 import type { NotificationSender } from '../ports/notification-sender.port';
 import type { NotificationSenderFactory } from '../ports/notification-sender-factory.port';

@@ -1,6 +1,6 @@
 import { NotificationChannel } from '@prisma/client';
 import type { UpdateNotificationPreferences } from '../dto/update-notification-preferences.dto';
-import { UpdateNotificationPreferencesInput } from '../model/update-notification-preferences.input';
+import type { UpdateNotificationPreferencesInput } from '../model/update-notification-preferences.input';
 
 export function mapUpdateNotificationPreferencesDtoToInput(
   dto: UpdateNotificationPreferences,
