@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
-import { Account, Customer, NotificationChannel } from '@prisma/client';
+import { Inject, Injectable } from '@nestjs/common';
+import type { Account, Customer } from '@prisma/client';
 import { InvoicesService } from '../invoices/invoices.service';
-import { OutboundNotification } from '../notifications/model/outbound-notification';
+import { toOutboundNotification } from '../notifications/mappers/outbound-notification.mapper';
+import type { NotificationRecipientResolver } from '../notifications/ports/notification-recipient-resolver.port';
+import { NOTIFICATION_RECIPIENT_RESOLVER } from '../notifications/ports/notification.tokens';
 import { NotificationHandler } from '../notifications/services/notification.handler';
+import { mapCustomerToNotificationTarget } from './mappers/notification-target.mapper';
 
 type CustomerWithAccount = Customer & { account: Account };
 
@@ -11,6 +14,8 @@ export class InvoiceReminderService {
   constructor(
     private readonly invoicesService: InvoicesService,
     private readonly notificationHandler: NotificationHandler,
+    @Inject(NOTIFICATION_RECIPIENT_RESOLVER)
+    private readonly recipientResolver: NotificationRecipientResolver,
   ) {}
 
   async run(referenceDate: Date = new Date()): Promise<void> {
@@ -34,26 +39,15 @@ export class InvoiceReminderService {
     }
   }
 
-  private buildNotification(
-    customer: CustomerWithAccount,
-    monthLabel: string,
-  ): OutboundNotification {
+  private buildNotification(customer: CustomerWithAccount, monthLabel: string) {
     const body = `Reminder: you have not submitted an invoice for ${monthLabel}. Please submit it before month end.`;
+    const target = mapCustomerToNotificationTarget(customer);
 
-    return {
-      customerId: customer.id,
-      channel: customer.notificationChannel,
-      recipient: this.resolveRecipient(customer),
-      subject: 'Invoice reminder',
+    return toOutboundNotification(
+      target,
+      'Invoice reminder',
       body,
-    };
-  }
-
-  private resolveRecipient(customer: CustomerWithAccount): string {
-    if (customer.notificationChannel === NotificationChannel.EMAIL) {
-      return customer.account.email;
-    }
-
-    return customer.phoneNumber!;
+      this.recipientResolver,
+    );
   }
 }
