@@ -42,13 +42,16 @@ export class UsersService {
 
     await this.prisma.customer.update({
       where: { accountId },
-      data: {
-        notificationChannel: input.notificationChannel,
-        phoneNumber:
-          input.notificationChannel === NotificationChannel.SMS
-            ? input.phoneNumber
-            : null,
-      },
+      data:
+        input.notificationChannel === NotificationChannel.SMS
+          ? {
+              notificationChannel: NotificationChannel.SMS,
+              phoneNumber: input.phoneNumber,
+            }
+          : {
+              notificationChannel: NotificationChannel.EMAIL,
+              phoneNumber: null,
+            },
     });
 
     return this.prisma.account.findUniqueOrThrow({
