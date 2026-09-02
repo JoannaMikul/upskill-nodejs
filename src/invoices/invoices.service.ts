@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Account, Customer, Invoice } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 type CustomerWithAccount = Customer & { account: Account };
@@ -17,8 +18,18 @@ export class InvoicesService {
       throw new NotFoundException('Customer profile not found');
     }
 
+    const today = new Date();
+
     return this.prisma.invoice.create({
-      data: { customerId: customer.id },
+      data: {
+        customerId: customer.id,
+        invoiceNumber: `INVOICE-NUMBER-${crypto.randomUUID()}`,
+        issueDate: today,
+        saleDate: today,
+        netAmount: new Prisma.Decimal(0),
+        vatAmount: new Prisma.Decimal(0),
+        grossAmount: new Prisma.Decimal(0),
+      },
     });
   }
 

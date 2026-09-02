@@ -17,15 +17,38 @@ enum NotificationChannel {
   SMS
 }
 
+enum InvoiceStatus {
+  ISSUED
+  VERIFIED
+}
+
+enum VatRate {
+  VAT_23
+  VAT_8
+  VAT_5
+  VAT_0
+  EXEMPT
+}
+
+enum ActivityAction {
+  LOGIN
+  INVOICE_CREATED
+  INVOICE_UPDATED
+  INVOICE_VERIFIED
+}
+
 model Account {
-  id           String   @id @default(uuid())
-  email        String
-  passwordHash String
-  role         Role
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  manager      Manager?
-  customer     Customer?
+  id               String        @id @default(uuid())
+  email            String
+  passwordHash     String
+  role             Role
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  manager          Manager?
+  customer         Customer?
+  verifiedInvoices Invoice[]     @relation("VerifiedBy")
+  activityLogs     ActivityLog[]
 
   @@unique([email])
 }
@@ -42,16 +65,110 @@ model Customer {
   account             Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
   notificationChannel NotificationChannel @default(EMAIL)
   phoneNumber         String?
+  sellerProfile       SellerProfile?
   invoices            Invoice[]
   notifications       Notification[]
 }
 
+model SellerProfile {
+  id                String   @id @default(uuid())
+  customerId        String   @unique
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name              String
+  nip               String   @unique
+  address           String
+  bankAccountNumber String?
+}
+
+model Contractor {
+  id                String         @id @default(uuid())
+  name              String
+  nip               String         @unique
+  address           String
+  postalCode        String
+  city              String
+  country           String         @default("PL")
+  email             String?
+  phone             String?
+  bankAccountNumber String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  invoiceBuyers     InvoiceBuyer[]
+}
+
 model Invoice {
-  id         String   @id @default(uuid())
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                  String            @id @default(uuid())
+  customerId          String
+  customer            Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  invoiceNumber       String
+  issueDate           DateTime          @db.Date
+  saleDate            DateTime          @db.Date
+  netAmount           Decimal           @db.Decimal(14, 2)
+  vatAmount           Decimal           @db.Decimal(14, 2)
+  grossAmount         Decimal           @db.Decimal(14, 2)
+  status              InvoiceStatus     @default(ISSUED)
+  verifiedAt          DateTime?
+  verifiedByAccountId String?
+  verifiedByAccount   Account?          @relation("VerifiedBy", fields: [verifiedByAccountId], references: [id], onDelete: SetNull)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  seller              InvoiceSeller?
+  buyer               InvoiceBuyer?
+  lineItems           InvoiceLineItem[]
+  activityLogs        ActivityLog[]
+
+  @@unique([customerId, invoiceNumber])
+}
+
+model InvoiceSeller {
+  id                String  @id @default(uuid())
+  invoiceId         String  @unique
+  invoice           Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  name              String
+  nip               String
+  address           String
+  bankAccountNumber String?
+}
+
+model InvoiceBuyer {
+  id           String     @id @default(uuid())
+  invoiceId    String     @unique
+  invoice      Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Restrict)
+  name         String
+  nip          String
+  address      String
+  postalCode   String
+  city         String
+  country      String
+}
+
+model InvoiceLineItem {
+  id              String   @id @default(uuid())
+  invoiceId       String
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  lineNumber      Int
+  name            String
+  unitOfMeasure   String
+  quantity        Decimal  @db.Decimal(14, 3)
+  unitNetPrice    Decimal  @db.Decimal(14, 2)
+  vatRate         VatRate
+  netAmount       Decimal  @db.Decimal(14, 2)
+  vatAmount       Decimal  @db.Decimal(14, 2)
+  grossAmount     Decimal  @db.Decimal(14, 2)
+}
+
+model ActivityLog {
+  id        String         @id @default(uuid())
+  accountId String
+  account   Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  action    ActivityAction
+  invoiceId String?
+  invoice   Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  createdAt DateTime       @default(now())
+
+  @@index([accountId, createdAt])
 }
 
 model Notification {
