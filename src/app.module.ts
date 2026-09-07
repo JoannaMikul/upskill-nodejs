@@ -4,6 +4,7 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AuthModule } from './auth/auth.module';
+import { ContractorsModule } from './contractors/contractors.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { CronModule } from './cron/cron.module';
 import { InvoicesModule } from './invoices/invoices.module';
@@ -17,6 +18,7 @@ import { UsersModule } from './users/users.module';
     PrismaModule,
     AuthModule,
     UsersModule,
+    ContractorsModule,
     InvoicesModule,
     CronModule,
   ],
