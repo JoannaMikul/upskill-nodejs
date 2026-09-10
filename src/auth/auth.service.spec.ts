@@ -32,6 +32,7 @@ describe('AuthService', () => {
           email: 'test@example.com',
           passwordHash: 'hashed-password',
           role: Role.CUSTOMER,
+          isActive: false,
           customer: {
             create: {},
           },
@@ -95,6 +96,24 @@ describe('AuthService', () => {
         authService.login({
           email: 'test@example.com',
           password: 'wrong-password',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+
+    it('rejects login when account is inactive with UnauthorizedException', async () => {
+      const { authService, prismaService, jwtService } =
+        await createAuthServiceTestContext();
+      const mockAccount = createMockAccount({ isActive: false });
+
+      prismaService.account.findUnique.mockResolvedValue(mockAccount);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        authService.login({
+          email: 'test@example.com',
+          password: 'password123',
         }),
       ).rejects.toThrow(UnauthorizedException);
 

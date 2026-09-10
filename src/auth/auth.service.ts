@@ -44,6 +44,7 @@ export class AuthService {
       tx.account.create({
         data: {
           ...createAccountInput,
+          isActive: false,
           customer: {
             create: {},
           },
@@ -71,6 +72,10 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (!account.isActive) {
       throw new UnauthorizedException('Invalid email or password');
     }
 

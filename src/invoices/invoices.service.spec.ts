@@ -54,6 +54,9 @@ describe('InvoicesService', () => {
 
       expect(findMany).toHaveBeenCalledWith({
         where: {
+          account: {
+            isActive: true,
+          },
           invoices: {
             none: {
               createdAt: {
@@ -75,6 +78,9 @@ describe('InvoicesService', () => {
 
       expect(findMany).toHaveBeenCalledWith({
         where: {
+          account: {
+            isActive: true,
+          },
           invoices: {
             none: {
               createdAt: {

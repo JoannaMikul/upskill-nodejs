@@ -3,27 +3,23 @@ import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 
-export type UsersServiceTestContext = {
-  usersService: UsersService;
-  prismaService: {
-    account: {
-      findUnique: jest.Mock;
-      upsert: jest.Mock;
-    };
-    manager: {
-      upsert: jest.Mock;
-    };
-    $transaction: jest.Mock;
-  };
-};
-
-export async function createUsersServiceTestContext(): Promise<UsersServiceTestContext> {
+export async function createUsersServiceTestContext() {
   const prismaService = {
     account: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
       upsert: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
     },
     manager: {
+      upsert: jest.fn(),
+    },
+    customer: {
+      update: jest.fn(),
+    },
+    sellerProfile: {
+      findUnique: jest.fn(),
       upsert: jest.fn(),
     },
     $transaction: jest.fn(),
@@ -46,3 +42,7 @@ export async function createUsersServiceTestContext(): Promise<UsersServiceTestC
     prismaService,
   };
 }
+
+export type UsersServiceTestContext = Awaited<
+  ReturnType<typeof createUsersServiceTestContext>
+>;

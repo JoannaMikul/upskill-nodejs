@@ -56,6 +56,9 @@ export class InvoicesService {
 
     return this.prisma.customer.findMany({
       where: {
+        account: {
+          isActive: true,
+        },
         invoices: {
           none: {
             createdAt: {

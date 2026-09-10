@@ -63,6 +63,18 @@ export async function loginUser(
   return response.body as AuthLoginResponseDto;
 }
 
+export async function activateCustomer(
+  app: INestApplication,
+  managerToken: string,
+  customerId: string,
+): Promise<void> {
+  await e2eRequest(app)
+    .patch(`/users/${customerId}/access`)
+    .set('Authorization', authHeader(managerToken))
+    .send({ isActive: true })
+    .expect(200);
+}
+
 export async function createTestActors(
   app: INestApplication,
   customerCredentials: AuthCredentials,
@@ -72,6 +84,7 @@ export async function createTestActors(
     password: MANAGER_PASSWORD,
   });
   const customer = await registerUser(app, customerCredentials);
+  await activateCustomer(app, managerLogin.accessToken, customer.id);
   const customerLogin = await loginUser(app, customerCredentials);
 
   return {
