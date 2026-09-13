@@ -1,11 +1,14 @@
 import type { INestApplication } from '@nestjs/common';
 import type { TestingModule } from '@nestjs/testing';
 import { Test } from '@nestjs/testing';
+import { VatRate } from '@prisma/client';
 import supertest from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import type { AuthLoginResponseDto } from '../src/auth/dto/auth-login-response.dto';
+import type { ContractorResponseDto } from '../src/contractors/dto/contractor-response.dto';
 import type { ErrorResponseDto } from '../src/common/filters/http-exception.filter';
+import type { CreateInvoice } from '../src/invoices/dto/create-invoice.dto';
 import type { UserResponseDto } from '../src/users/dto/user-response.dto';
 import { UsersService } from '../src/users/users.service';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -73,6 +76,71 @@ export async function activateCustomer(
     .set('Authorization', authHeader(managerToken))
     .send({ isActive: true })
     .expect(200);
+}
+
+export const defaultSellerProfile = {
+  name: 'Seller Sp. z o.o.',
+  nip: '774-000-14-54',
+  address: '1 Seller Street, 00-001 Warsaw',
+  bankAccountNumber: 'PL61109010140000071219812874',
+};
+
+export const defaultContractorPayload = {
+  name: 'Test Buyer Ltd.',
+  nip: '123-456-78-91',
+  address: '10 Buyer Street',
+  postalCode: '00-001',
+  city: 'Warsaw',
+  country: 'PL',
+};
+
+export function buildCreateInvoicePayload(
+  buyerId: string,
+  overrides: Partial<CreateInvoice> = {},
+): CreateInvoice {
+  return {
+    buyerId,
+    invoiceNumber: 'INV/1/2026',
+    issueDate: '2026-09-10',
+    saleDate: '2026-09-10',
+    lineItems: [
+      {
+        lineNumber: 1,
+        name: 'IT Service',
+        unitOfMeasure: 'pcs.',
+        quantity: '2',
+        unitNetPrice: '100',
+        vatRate: VatRate.VAT_23,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export async function upsertSellerProfileForCustomer(
+  app: INestApplication,
+  customerToken: string,
+  profile = defaultSellerProfile,
+): Promise<void> {
+  await e2eRequest(app)
+    .patch('/users/me/seller-profile')
+    .set('Authorization', authHeader(customerToken))
+    .send(profile)
+    .expect(200);
+}
+
+export async function createContractorAsManager(
+  app: INestApplication,
+  managerToken: string,
+  payload = defaultContractorPayload,
+): Promise<ContractorResponseDto> {
+  const response = await e2eRequest(app)
+    .post('/contractors')
+    .set('Authorization', authHeader(managerToken))
+    .send(payload)
+    .expect(201);
+
+  return response.body as ContractorResponseDto;
 }
 
 export async function createTestActors(
