@@ -2,11 +2,14 @@ import type { ContractorResponseDto } from '../src/contractors/dto/contractor-re
 import type { InvoiceResponseDto } from '../src/invoices/dto/invoice-response.dto';
 import type { ErrorResponseDto, TestActors } from './e2e-setup';
 import {
+  activateCustomer,
   authHeader,
   buildCreateInvoicePayload,
   createContractorAsManager,
   createTestActors,
   e2eRequest,
+  loginUser,
+  registerUser,
   setupE2eSuite,
   upsertSellerProfileForCustomer,
 } from './e2e-setup';
@@ -91,7 +94,7 @@ describe('Invoices', () => {
     expect(invoice!.lineItems[0].netAmount.toFixed(2)).toBe('200.00');
   });
 
-  it('lists own invoices via GET /invoices/me', async () => {
+  it('lists own invoices via GET /invoices/me with full VAT payload', async () => {
     const response = await e2eRequest(e2e.app)
       .get('/invoices/me')
       .set('Authorization', authHeader(actors.customerToken))
@@ -101,8 +104,93 @@ describe('Invoices', () => {
 
     expect(Array.isArray(body)).toBe(true);
     expect(body.length).toBeGreaterThanOrEqual(1);
-    expect(body[0]).toHaveProperty('id');
-    expect(body[0]).toHaveProperty('customerId');
+    expect(body[0]).toMatchObject({
+      invoiceNumber: 'INV/1/2026',
+      issueDate: '2026-09-10',
+      saleDate: '2026-09-10',
+      status: 'ISSUED',
+      netAmount: '200.00',
+      vatAmount: '46.00',
+      grossAmount: '246.00',
+      seller: {
+        name: 'Seller Sp. z o.o.',
+        nip: '7740001454',
+      },
+      buyer: {
+        contractorId: contractor.id,
+        name: contractor.name,
+      },
+    });
+    expect(body[0].lineItems).toHaveLength(1);
+    expect(body[0].lineItems[0]).toMatchObject({
+      lineNumber: 1,
+      name: 'IT Service',
+      quantity: '2',
+      unitNetPrice: '100.00',
+      vatRate: 'VAT_23',
+      netAmount: '200.00',
+    });
+  });
+
+  it('returns invoice details via GET /invoices/:id for owner', async () => {
+    const listResponse = await e2eRequest(e2e.app)
+      .get('/invoices/me')
+      .set('Authorization', authHeader(actors.customerToken))
+      .expect(200);
+
+    const invoiceId = (listResponse.body as InvoiceResponseDto[])[0].id;
+
+    const response = await e2eRequest(e2e.app)
+      .get(`/invoices/${invoiceId}`)
+      .set('Authorization', authHeader(actors.customerToken))
+      .expect(200);
+
+    const body = response.body as InvoiceResponseDto;
+
+    expect(body.id).toBe(invoiceId);
+    expect(body.seller.name).toBe('Seller Sp. z o.o.');
+    expect(body.lineItems).toHaveLength(1);
+  });
+
+  it('allows manager to read any invoice via GET /invoices/:id', async () => {
+    const listResponse = await e2eRequest(e2e.app)
+      .get('/invoices/me')
+      .set('Authorization', authHeader(actors.customerToken))
+      .expect(200);
+
+    const invoiceId = (listResponse.body as InvoiceResponseDto[])[0].id;
+
+    await e2eRequest(e2e.app)
+      .get(`/invoices/${invoiceId}`)
+      .set('Authorization', authHeader(actors.managerToken))
+      .expect(200);
+  });
+
+  it('returns 404 when customer requests another customers invoice', async () => {
+    const listResponse = await e2eRequest(e2e.app)
+      .get('/invoices/me')
+      .set('Authorization', authHeader(actors.customerToken))
+      .expect(200);
+
+    const invoiceId = (listResponse.body as InvoiceResponseDto[])[0].id;
+
+    const otherCustomerCredentials = {
+      email: `other-invoice-customer-${Date.now()}@example.com`,
+      password: 'CustomerPass1234',
+    };
+    const otherCustomer = await registerUser(e2e.app, otherCustomerCredentials);
+    await activateCustomer(e2e.app, actors.managerToken, otherCustomer.id);
+    const otherLogin = await loginUser(e2e.app, otherCustomerCredentials);
+
+    const response = await e2eRequest(e2e.app)
+      .get(`/invoices/${invoiceId}`)
+      .set('Authorization', authHeader(otherLogin.accessToken))
+      .expect(404);
+
+    expect(response.body as ErrorResponseDto).toMatchObject({
+      statusCode: 404,
+      message: 'Invoice not found',
+    });
   });
 
   it('returns 409 when invoice number already exists for customer', async () => {

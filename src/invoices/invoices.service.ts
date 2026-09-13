@@ -3,13 +3,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Account, Customer, Invoice } from '@prisma/client';
+import { Role, type Account, type Customer } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import {
   calculateInvoiceTotals,
   calculateLineAmounts,
 } from '../common/validation/invoice-amounts';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  assertInvoiceWithDetails,
+  invoiceDetailsInclude,
+  type InvoiceWithDetails,
+} from './model/invoice-with-details';
 import type { CreateInvoiceInput } from './model/create-invoice.input';
 
 type CustomerWithAccount = Customer & { account: Account };
@@ -18,7 +23,10 @@ type CustomerWithAccount = Customer & { account: Account };
 export class InvoicesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(accountId: string, input: CreateInvoiceInput): Promise<Invoice> {
+  async create(
+    accountId: string,
+    input: CreateInvoiceInput,
+  ): Promise<InvoiceWithDetails> {
     const customer = await this.prisma.customer.findUnique({
       where: { accountId },
       include: { sellerProfile: true },
@@ -83,8 +91,9 @@ export class InvoicesService {
       })),
     );
 
-    return this.prisma.$transaction((tx) =>
+    const invoice = await this.prisma.$transaction((tx) =>
       tx.invoice.create({
+        include: invoiceDetailsInclude,
         data: {
           customerId: customer.id,
           invoiceNumber: input.invoiceNumber,
@@ -118,9 +127,11 @@ export class InvoicesService {
         },
       }),
     );
+
+    return assertInvoiceWithDetails(invoice);
   }
 
-  async findMyInvoices(accountId: string): Promise<Invoice[]> {
+  async findMyInvoices(accountId: string): Promise<InvoiceWithDetails[]> {
     const customer = await this.prisma.customer.findUnique({
       where: { accountId },
     });
@@ -129,9 +140,40 @@ export class InvoicesService {
       throw new NotFoundException('Customer profile not found');
     }
 
-    return this.prisma.invoice.findMany({
+    const invoices = await this.prisma.invoice.findMany({
       where: { customerId: customer.id },
+      include: invoiceDetailsInclude,
+      orderBy: { createdAt: 'desc' },
     });
+
+    return invoices.map(assertInvoiceWithDetails);
+  }
+
+  async findById(
+    accountId: string,
+    role: Role,
+    invoiceId: string,
+  ): Promise<InvoiceWithDetails> {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: invoiceDetailsInclude,
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    if (role === Role.CUSTOMER) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { accountId },
+      });
+
+      if (!customer || invoice.customerId !== customer.id) {
+        throw new NotFoundException('Invoice not found');
+      }
+    }
+
+    return assertInvoiceWithDetails(invoice);
   }
 
   async findCustomersWithoutInvoiceForMonth(

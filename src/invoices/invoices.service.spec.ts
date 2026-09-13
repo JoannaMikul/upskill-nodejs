@@ -10,7 +10,12 @@ import {
   type Invoice,
   type SellerProfile,
 } from '@prisma/client';
+import {
+  calculateInvoiceTotals,
+  calculateLineAmounts,
+} from '../common/validation/invoice-amounts';
 import { PrismaService } from '../prisma/prisma.service';
+import { invoiceDetailsInclude } from './model/invoice-with-details';
 import { InvoicesService } from './invoices.service';
 import type { CreateInvoiceInput } from './model/create-invoice.input';
 
@@ -60,21 +65,29 @@ const mockContractor: Contractor = {
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };
 
+const createLineItemInput = {
+  lineNumber: 1,
+  name: 'IT Service',
+  unitOfMeasure: 'pcs.',
+  quantity: '1',
+  unitNetPrice: '200.45',
+  vatRate: VatRate.VAT_23,
+};
+
+const calculatedLineAmounts = calculateLineAmounts({
+  quantity: createLineItemInput.quantity,
+  unitNetPrice: createLineItemInput.unitNetPrice,
+  vatRate: createLineItemInput.vatRate,
+});
+
+const calculatedInvoiceTotals = calculateInvoiceTotals([calculatedLineAmounts]);
+
 const createInput: CreateInvoiceInput = {
   buyerId: contractorId,
   invoiceNumber: 'FV/1/2026',
   issueDate: new Date(Date.UTC(2026, 8, 10)),
   saleDate: new Date(Date.UTC(2026, 8, 10)),
-  lineItems: [
-    {
-      lineNumber: 1,
-      name: 'IT Service',
-      unitOfMeasure: 'pcs.',
-      quantity: '2',
-      unitNetPrice: '100',
-      vatRate: VatRate.VAT_23,
-    },
-  ],
+  lineItems: [createLineItemInput],
 };
 
 const mockInvoice: Invoice = {
@@ -83,14 +96,52 @@ const mockInvoice: Invoice = {
   invoiceNumber: createInput.invoiceNumber,
   issueDate: createInput.issueDate,
   saleDate: createInput.saleDate,
-  netAmount: new Prisma.Decimal('200.00'),
-  vatAmount: new Prisma.Decimal('46.00'),
-  grossAmount: new Prisma.Decimal('246.00'),
+  netAmount: calculatedInvoiceTotals.netAmount,
+  vatAmount: calculatedInvoiceTotals.vatAmount,
+  grossAmount: calculatedInvoiceTotals.grossAmount,
   status: 'ISSUED',
   verifiedAt: null,
   verifiedByAccountId: null,
   createdAt: new Date('2026-09-10T00:00:00.000Z'),
   updatedAt: new Date('2026-09-10T00:00:00.000Z'),
+};
+
+const mockInvoiceWithDetails = {
+  ...mockInvoice,
+  seller: {
+    id: '550e8400-e29b-41d4-a716-446655440031',
+    invoiceId: mockInvoice.id,
+    name: mockSellerProfile.name,
+    nip: mockSellerProfile.nip,
+    address: mockSellerProfile.address,
+    bankAccountNumber: mockSellerProfile.bankAccountNumber,
+  },
+  buyer: {
+    id: '550e8400-e29b-41d4-a716-446655440032',
+    invoiceId: mockInvoice.id,
+    contractorId: mockContractor.id,
+    name: mockContractor.name,
+    nip: mockContractor.nip,
+    address: mockContractor.address,
+    postalCode: mockContractor.postalCode,
+    city: mockContractor.city,
+    country: mockContractor.country,
+  },
+  lineItems: [
+    {
+      id: '550e8400-e29b-41d4-a716-446655440033',
+      invoiceId: mockInvoice.id,
+      lineNumber: 1,
+      name: 'IT Service',
+      unitOfMeasure: 'pcs.',
+      quantity: new Prisma.Decimal(createLineItemInput.quantity),
+      unitNetPrice: new Prisma.Decimal(createLineItemInput.unitNetPrice),
+      vatRate: VatRate.VAT_23,
+      netAmount: calculatedLineAmounts.netAmount,
+      vatAmount: calculatedLineAmounts.vatAmount,
+      grossAmount: calculatedLineAmounts.grossAmount,
+    },
+  ],
 };
 
 describe('InvoicesService', () => {
@@ -145,7 +196,7 @@ describe('InvoicesService', () => {
       });
       contractorFindUnique.mockResolvedValue(mockContractor);
       invoiceFindUnique.mockResolvedValue(null);
-      invoiceCreate.mockResolvedValue(mockInvoice);
+      invoiceCreate.mockResolvedValue(mockInvoiceWithDetails);
 
       const result = await invoicesService.create(accountId, createInput);
 
@@ -217,9 +268,15 @@ describe('InvoicesService', () => {
       expect(createCall.data.invoiceNumber).toBe(createInput.invoiceNumber);
       expect(createCall.data.issueDate).toEqual(createInput.issueDate);
       expect(createCall.data.saleDate).toEqual(createInput.saleDate);
-      expect(createCall.data.netAmount.toFixed(2)).toBe('200.00');
-      expect(createCall.data.vatAmount.toFixed(2)).toBe('46.00');
-      expect(createCall.data.grossAmount.toFixed(2)).toBe('246.00');
+      expect(createCall.data.netAmount.toFixed(2)).toBe(
+        calculatedInvoiceTotals.netAmount.toFixed(2),
+      );
+      expect(createCall.data.vatAmount.toFixed(2)).toBe(
+        calculatedInvoiceTotals.vatAmount.toFixed(2),
+      );
+      expect(createCall.data.grossAmount.toFixed(2)).toBe(
+        calculatedInvoiceTotals.grossAmount.toFixed(2),
+      );
       expect(createCall.data.seller.create).toEqual({
         name: mockSellerProfile.name,
         nip: mockSellerProfile.nip,
@@ -243,9 +300,9 @@ describe('InvoicesService', () => {
         vatRate: VatRate.VAT_23,
       });
       expect(createCall.data.lineItems.create[0].netAmount.toFixed(2)).toBe(
-        '200.00',
+        calculatedLineAmounts.netAmount.toFixed(2),
       );
-      expect(result).toEqual(mockInvoice);
+      expect(result).toEqual(mockInvoiceWithDetails);
     });
 
     it('throws NotFoundException when customer profile is missing', async () => {
@@ -301,6 +358,136 @@ describe('InvoicesService', () => {
       ).rejects.toThrow(new ConflictException('Invoice number already exists'));
 
       expect($transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findMyInvoices', () => {
+    const customerFindUnique = jest.fn();
+    const invoiceFindMany = jest.fn();
+    let invoicesService: InvoicesService;
+
+    beforeEach(async () => {
+      customerFindUnique.mockReset();
+      invoiceFindMany.mockReset();
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          InvoicesService,
+          {
+            provide: PrismaService,
+            useValue: {
+              customer: { findUnique: customerFindUnique },
+              invoice: { findMany: invoiceFindMany },
+            },
+          },
+        ],
+      }).compile();
+
+      invoicesService = module.get(InvoicesService);
+    });
+
+    it('returns customer invoices with details ordered by createdAt desc', async () => {
+      customerFindUnique.mockResolvedValue({ id: customerId, accountId });
+      invoiceFindMany.mockResolvedValue([mockInvoiceWithDetails]);
+
+      const result = await invoicesService.findMyInvoices(accountId);
+
+      expect(customerFindUnique).toHaveBeenCalledWith({
+        where: { accountId },
+      });
+      expect(invoiceFindMany).toHaveBeenCalledWith({
+        where: { customerId },
+        include: invoiceDetailsInclude,
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(result).toEqual([mockInvoiceWithDetails]);
+    });
+
+    it('throws NotFoundException when customer profile is missing', async () => {
+      customerFindUnique.mockResolvedValue(null);
+
+      await expect(invoicesService.findMyInvoices(accountId)).rejects.toThrow(
+        new NotFoundException('Customer profile not found'),
+      );
+    });
+  });
+
+  describe('findById', () => {
+    const customerFindUnique = jest.fn();
+    const invoiceFindUnique = jest.fn();
+    let invoicesService: InvoicesService;
+
+    beforeEach(async () => {
+      customerFindUnique.mockReset();
+      invoiceFindUnique.mockReset();
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          InvoicesService,
+          {
+            provide: PrismaService,
+            useValue: {
+              customer: { findUnique: customerFindUnique },
+              invoice: { findUnique: invoiceFindUnique },
+            },
+          },
+        ],
+      }).compile();
+
+      invoicesService = module.get(InvoicesService);
+    });
+
+    it('returns invoice for owning customer', async () => {
+      invoiceFindUnique.mockResolvedValue(mockInvoiceWithDetails);
+      customerFindUnique.mockResolvedValue({ id: customerId, accountId });
+
+      const result = await invoicesService.findById(
+        accountId,
+        Role.CUSTOMER,
+        mockInvoice.id,
+      );
+
+      expect(invoiceFindUnique).toHaveBeenCalledWith({
+        where: { id: mockInvoice.id },
+        include: invoiceDetailsInclude,
+      });
+      expect(customerFindUnique).toHaveBeenCalledWith({
+        where: { accountId },
+      });
+      expect(result).toEqual(mockInvoiceWithDetails);
+    });
+
+    it('returns invoice for manager without ownership check', async () => {
+      invoiceFindUnique.mockResolvedValue(mockInvoiceWithDetails);
+
+      const result = await invoicesService.findById(
+        'manager-account-id',
+        Role.MANAGER,
+        mockInvoice.id,
+      );
+
+      expect(customerFindUnique).not.toHaveBeenCalled();
+      expect(result).toEqual(mockInvoiceWithDetails);
+    });
+
+    it('throws NotFoundException when invoice is missing', async () => {
+      invoiceFindUnique.mockResolvedValue(null);
+
+      await expect(
+        invoicesService.findById(accountId, Role.CUSTOMER, mockInvoice.id),
+      ).rejects.toThrow(new NotFoundException('Invoice not found'));
+    });
+
+    it('throws NotFoundException when customer does not own the invoice', async () => {
+      invoiceFindUnique.mockResolvedValue(mockInvoiceWithDetails);
+      customerFindUnique.mockResolvedValue({
+        id: 'other-customer-id',
+        accountId,
+      });
+
+      await expect(
+        invoicesService.findById(accountId, Role.CUSTOMER, mockInvoice.id),
+      ).rejects.toThrow(new NotFoundException('Invoice not found'));
     });
   });
 

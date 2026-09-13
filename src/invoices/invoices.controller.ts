@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -37,5 +37,20 @@ export class InvoicesController {
   ): Promise<InvoiceResponseDto[]> {
     const invoices = await this.invoicesService.findMyInvoices(user.sub);
     return invoices.map(toInvoiceResponseDto);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.CUSTOMER, Role.MANAGER)
+  async findById(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<InvoiceResponseDto> {
+    const invoice = await this.invoicesService.findById(
+      user.sub,
+      user.role,
+      id,
+    );
+    return toInvoiceResponseDto(invoice);
   }
 }
