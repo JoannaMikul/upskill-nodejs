@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { TestingModule } from '@nestjs/testing';
 import { Test } from '@nestjs/testing';
 import {
+  InvoiceStatus,
   NotificationChannel,
   Prisma,
   Role,
@@ -15,9 +16,21 @@ import {
   calculateLineAmounts,
 } from '../common/validation/invoice-amounts';
 import { PrismaService } from '../prisma/prisma.service';
-import { invoiceDetailsInclude } from './model/invoice-with-details';
+import {
+  invoiceDetailsInclude,
+  type InvoiceWithDetails,
+} from './model/invoice-with-details';
 import { InvoicesService } from './invoices.service';
 import type { CreateInvoiceInput } from './model/create-invoice.input';
+import type { UpdateInvoiceInput } from './model/update-invoice.input';
+
+type InvoiceUpdateHandler = {
+  update(
+    accountId: string,
+    invoiceId: string,
+    input: UpdateInvoiceInput,
+  ): Promise<InvoiceWithDetails>;
+};
 
 const customers = [
   {
@@ -106,7 +119,7 @@ const mockInvoice: Invoice = {
   updatedAt: new Date('2026-09-10T00:00:00.000Z'),
 };
 
-const mockInvoiceWithDetails = {
+const mockInvoiceWithDetails: InvoiceWithDetails = {
   ...mockInvoice,
   seller: {
     id: '550e8400-e29b-41d4-a716-446655440031',
@@ -140,6 +153,23 @@ const mockInvoiceWithDetails = {
       netAmount: calculatedLineAmounts.netAmount,
       vatAmount: calculatedLineAmounts.vatAmount,
       grossAmount: calculatedLineAmounts.grossAmount,
+    },
+  ],
+};
+
+const updateInput: UpdateInvoiceInput = {
+  buyerId: contractorId,
+  invoiceNumber: 'FV/2/2026',
+  issueDate: createInput.issueDate,
+  saleDate: createInput.saleDate,
+  lineItems: [
+    {
+      lineNumber: 1,
+      name: 'Updated Service',
+      unitOfMeasure: 'h',
+      quantity: '3',
+      unitNetPrice: '50',
+      vatRate: VatRate.VAT_23,
     },
   ],
 };
@@ -185,7 +215,7 @@ describe('InvoicesService', () => {
         ],
       }).compile();
 
-      invoicesService = module.get(InvoicesService);
+      invoicesService = module.get<InvoicesService>(InvoicesService);
     });
 
     it('creates invoice with snapshots, line items and calculated totals in a transaction', async () => {
@@ -361,6 +391,166 @@ describe('InvoicesService', () => {
     });
   });
 
+  describe('update', () => {
+    const customerFindUnique = jest.fn();
+    const contractorFindUnique = jest.fn();
+    const invoiceFindUnique = jest.fn();
+    const invoiceUpdate = jest.fn();
+    const $transaction = jest.fn();
+    let invoiceUpdateHandler: InvoiceUpdateHandler;
+
+    beforeEach(async () => {
+      customerFindUnique.mockReset();
+      contractorFindUnique.mockReset();
+      invoiceFindUnique.mockReset();
+      invoiceUpdate.mockReset();
+      $transaction.mockReset();
+
+      $transaction.mockImplementation(
+        (
+          callback: (tx: {
+            invoice: { update: typeof invoiceUpdate };
+          }) => unknown,
+        ) => callback({ invoice: { update: invoiceUpdate } }),
+      );
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          InvoicesService,
+          {
+            provide: PrismaService,
+            useValue: {
+              customer: { findUnique: customerFindUnique },
+              contractor: { findUnique: contractorFindUnique },
+              invoice: {
+                findUnique: invoiceFindUnique,
+              },
+              $transaction,
+            },
+          },
+        ],
+      }).compile();
+
+      invoiceUpdateHandler = module.get<InvoicesService>(InvoicesService);
+    });
+
+    it('replaces line items and recalculates totals in a transaction when ISSUED', async () => {
+      customerFindUnique.mockResolvedValue({
+        id: customerId,
+        accountId,
+        sellerProfile: mockSellerProfile,
+      });
+      invoiceFindUnique.mockResolvedValue({
+        ...mockInvoice,
+        status: InvoiceStatus.ISSUED,
+      });
+      contractorFindUnique.mockResolvedValue(mockContractor);
+      invoiceUpdate.mockResolvedValue({
+        ...mockInvoiceWithDetails,
+        invoiceNumber: updateInput.invoiceNumber,
+      });
+
+      await invoiceUpdateHandler.update(accountId, mockInvoice.id, updateInput);
+
+      expect(invoiceFindUnique).toHaveBeenCalledWith({
+        where: { id: mockInvoice.id },
+      });
+      expect($transaction).toHaveBeenCalledTimes(1);
+      expect(invoiceUpdate).toHaveBeenCalledTimes(1);
+
+      type InvoiceUpdateCall = {
+        where: { id: string };
+        include: typeof invoiceDetailsInclude;
+        data: {
+          invoiceNumber: string;
+          lineItems: {
+            deleteMany: Record<string, never>;
+            create: Array<{ name: string }>;
+          };
+        };
+      };
+
+      const [[updateCall]] = invoiceUpdate.mock.calls as Array<
+        [InvoiceUpdateCall]
+      >;
+
+      expect(updateCall.where.id).toBe(mockInvoice.id);
+      expect(updateCall.data.invoiceNumber).toBe(updateInput.invoiceNumber);
+      expect(updateCall.data.lineItems.deleteMany).toEqual({});
+      expect(updateCall.data.lineItems.create).toHaveLength(1);
+      expect(updateCall.data.lineItems.create[0].name).toBe('Updated Service');
+    });
+
+    it('throws NotFoundException when invoice is missing or not owned', async () => {
+      customerFindUnique.mockResolvedValue({
+        id: customerId,
+        accountId,
+        sellerProfile: mockSellerProfile,
+      });
+      invoiceFindUnique.mockResolvedValue(null);
+
+      await expect(
+        invoiceUpdateHandler.update(accountId, mockInvoice.id, updateInput),
+      ).rejects.toThrow(new NotFoundException('Invoice not found'));
+
+      invoiceFindUnique.mockResolvedValue({
+        ...mockInvoice,
+        customerId: 'other-customer',
+        status: InvoiceStatus.ISSUED,
+      });
+
+      await expect(
+        invoiceUpdateHandler.update(accountId, mockInvoice.id, updateInput),
+      ).rejects.toThrow(new NotFoundException('Invoice not found'));
+
+      expect($transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when invoice is VERIFIED', async () => {
+      customerFindUnique.mockResolvedValue({
+        id: customerId,
+        accountId,
+        sellerProfile: mockSellerProfile,
+      });
+      invoiceFindUnique.mockResolvedValue({
+        ...mockInvoice,
+        status: InvoiceStatus.VERIFIED,
+      });
+
+      await expect(
+        invoiceUpdateHandler.update(accountId, mockInvoice.id, updateInput),
+      ).rejects.toThrow(
+        new ConflictException('Verified invoice cannot be updated'),
+      );
+
+      expect($transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when new invoice number already exists', async () => {
+      customerFindUnique.mockResolvedValue({
+        id: customerId,
+        accountId,
+        sellerProfile: mockSellerProfile,
+      });
+      invoiceFindUnique
+        .mockResolvedValueOnce({
+          ...mockInvoice,
+          status: InvoiceStatus.ISSUED,
+        })
+        .mockResolvedValueOnce({ id: 'other-invoice-id' });
+      contractorFindUnique.mockResolvedValue(mockContractor);
+
+      await expect(
+        invoiceUpdateHandler.update(accountId, mockInvoice.id, {
+          ...updateInput,
+          invoiceNumber: 'FV/TAKEN/2026',
+        }),
+      ).rejects.toThrow(new ConflictException('Invoice number already exists'));
+
+      expect($transaction).not.toHaveBeenCalled();
+    });
+  });
+
   describe('findMyInvoices', () => {
     const customerFindUnique = jest.fn();
     const invoiceFindMany = jest.fn();
@@ -383,7 +573,7 @@ describe('InvoicesService', () => {
         ],
       }).compile();
 
-      invoicesService = module.get(InvoicesService);
+      invoicesService = module.get<InvoicesService>(InvoicesService);
     });
 
     it('returns customer invoices with details ordered by createdAt desc', async () => {
@@ -434,7 +624,7 @@ describe('InvoicesService', () => {
         ],
       }).compile();
 
-      invoicesService = module.get(InvoicesService);
+      invoicesService = module.get<InvoicesService>(InvoicesService);
     });
 
     it('returns invoice for owning customer', async () => {
@@ -510,7 +700,7 @@ describe('InvoicesService', () => {
         ],
       }).compile();
 
-      invoicesService = module.get(InvoicesService);
+      invoicesService = module.get<InvoicesService>(InvoicesService);
     });
 
     it('queries customers without invoice in the given month', async () => {

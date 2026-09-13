@@ -1,3 +1,4 @@
+import { VatRate } from '@prisma/client';
 import type { ContractorResponseDto } from '../src/contractors/dto/contractor-response.dto';
 import type { InvoiceResponseDto } from '../src/invoices/dto/invoice-response.dto';
 import type { ErrorResponseDto, TestActors } from './e2e-setup';
@@ -207,6 +208,110 @@ describe('Invoices', () => {
     expect(response.body as ErrorResponseDto).toMatchObject({
       statusCode: 409,
       message: 'Invoice number already exists',
+    });
+  });
+
+  it('updates ISSUED invoice via PATCH /invoices/:id', async () => {
+    const listResponse = await e2eRequest(e2e.app)
+      .get('/invoices/me')
+      .set('Authorization', authHeader(actors.customerToken))
+      .expect(200);
+
+    const invoiceId = (listResponse.body as InvoiceResponseDto[])[0].id;
+
+    const updatePayload = buildCreateInvoicePayload(contractor.id, {
+      invoiceNumber: 'INV/2/2026',
+      lineItems: [
+        {
+          lineNumber: 1,
+          name: 'Updated IT Service',
+          unitOfMeasure: 'h',
+          quantity: '4',
+          unitNetPrice: '75',
+          vatRate: VatRate.VAT_23,
+        },
+      ],
+    });
+
+    const response = await e2eRequest(e2e.app)
+      .patch(`/invoices/${invoiceId}`)
+      .set('Authorization', authHeader(actors.customerToken))
+      .send(updatePayload)
+      .expect(200);
+
+    const body = response.body as InvoiceResponseDto;
+
+    expect(body.invoiceNumber).toBe('INV/2/2026');
+    expect(body.netAmount).toBe('300.00');
+    expect(body.vatAmount).toBe('69.00');
+    expect(body.grossAmount).toBe('369.00');
+    expect(body.lineItems).toHaveLength(1);
+    expect(body.lineItems[0]).toMatchObject({
+      name: 'Updated IT Service',
+      quantity: '4',
+      unitNetPrice: '75.00',
+    });
+
+    const lineItemCount = await e2e.prisma.invoiceLineItem.count({
+      where: { invoiceId },
+    });
+    expect(lineItemCount).toBe(1);
+  });
+
+  it('returns 409 when updating VERIFIED invoice', async () => {
+    const listResponse = await e2eRequest(e2e.app)
+      .get('/invoices/me')
+      .set('Authorization', authHeader(actors.customerToken))
+      .expect(200);
+
+    const invoiceId = (listResponse.body as InvoiceResponseDto[])[0].id;
+
+    await e2e.prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { status: 'VERIFIED' },
+    });
+
+    const response = await e2eRequest(e2e.app)
+      .patch(`/invoices/${invoiceId}`)
+      .set('Authorization', authHeader(actors.customerToken))
+      .send(buildCreateInvoicePayload(contractor.id))
+      .expect(409);
+
+    expect(response.body as ErrorResponseDto).toMatchObject({
+      statusCode: 409,
+      message: 'Verified invoice cannot be updated',
+    });
+  });
+
+  it('returns 404 when customer patches another customers invoice', async () => {
+    const listResponse = await e2eRequest(e2e.app)
+      .get('/invoices/me')
+      .set('Authorization', authHeader(actors.customerToken))
+      .expect(200);
+
+    const invoiceId = (listResponse.body as InvoiceResponseDto[])[0].id;
+
+    const otherCustomerCredentials = {
+      email: `patch-other-${Date.now()}@example.com`,
+      password: 'CustomerPass1234',
+    };
+    const otherCustomer = await registerUser(e2e.app, otherCustomerCredentials);
+    await activateCustomer(e2e.app, actors.managerToken, otherCustomer.id);
+    await upsertSellerProfileForCustomer(
+      e2e.app,
+      (await loginUser(e2e.app, otherCustomerCredentials)).accessToken,
+    );
+    const otherLogin = await loginUser(e2e.app, otherCustomerCredentials);
+
+    const response = await e2eRequest(e2e.app)
+      .patch(`/invoices/${invoiceId}`)
+      .set('Authorization', authHeader(otherLogin.accessToken))
+      .send(buildCreateInvoicePayload(contractor.id))
+      .expect(404);
+
+    expect(response.body as ErrorResponseDto).toMatchObject({
+      statusCode: 404,
+      message: 'Invoice not found',
     });
   });
 
