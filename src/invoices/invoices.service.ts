@@ -3,7 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ActivityLogService } from '../audit/activity-log.service';
 import {
+  ActivityAction,
   InvoiceStatus,
   Role,
   type Account,
@@ -32,7 +34,10 @@ type CustomerWithAccount = Customer & { account: Account };
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityLogService: ActivityLogService,
+  ) {}
 
   async create(
     accountId: string,
@@ -115,7 +120,15 @@ export class InvoicesService {
       }),
     );
 
-    return assertInvoiceWithDetails(invoice);
+    const createdInvoice = assertInvoiceWithDetails(invoice);
+
+    await this.activityLogService.log(
+      accountId,
+      ActivityAction.INVOICE_CREATED,
+      createdInvoice.id,
+    );
+
+    return createdInvoice;
   }
 
   async update(
@@ -214,7 +227,15 @@ export class InvoicesService {
       }),
     );
 
-    return assertInvoiceWithDetails(updatedInvoice);
+    const result = assertInvoiceWithDetails(updatedInvoice);
+
+    await this.activityLogService.log(
+      accountId,
+      ActivityAction.INVOICE_UPDATED,
+      result.id,
+    );
+
+    return result;
   }
 
   async findMyInvoices(accountId: string): Promise<InvoiceWithDetails[]> {
@@ -289,7 +310,15 @@ export class InvoicesService {
       },
     });
 
-    return assertInvoiceWithDetails(verifiedInvoice);
+    const result = assertInvoiceWithDetails(verifiedInvoice);
+
+    await this.activityLogService.log(
+      managerAccountId,
+      ActivityAction.INVOICE_VERIFIED,
+      result.id,
+    );
+
+    return result;
   }
 
   async findById(

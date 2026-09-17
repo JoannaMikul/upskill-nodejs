@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { TestingModule } from '@nestjs/testing';
 import { Test } from '@nestjs/testing';
 import {
+  ActivityAction,
   InvoiceStatus,
   NotificationChannel,
   Prisma,
@@ -11,6 +12,7 @@ import {
   type Invoice,
   type SellerProfile,
 } from '@prisma/client';
+import { ActivityLogService } from '../audit/activity-log.service';
 import {
   calculateInvoiceTotals,
   calculateLineAmounts,
@@ -23,6 +25,23 @@ import {
 import { InvoicesService } from './invoices.service';
 import type { CreateInvoiceInput } from './model/create-invoice.input';
 import type { UpdateInvoiceInput } from './model/update-invoice.input';
+
+const logActivityMock = jest.fn();
+
+function activityLogServiceProvider(): {
+  provide: typeof ActivityLogService;
+  useValue: { log: typeof logActivityMock };
+} {
+  return {
+    provide: ActivityLogService,
+    useValue: { log: logActivityMock },
+  };
+}
+
+beforeEach(() => {
+  logActivityMock.mockReset();
+  logActivityMock.mockResolvedValue(undefined);
+});
 
 type InvoiceUpdateHandler = {
   update(
@@ -201,6 +220,7 @@ describe('InvoicesService', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           InvoicesService,
+          activityLogServiceProvider(),
           {
             provide: PrismaService,
             useValue: {
@@ -333,6 +353,11 @@ describe('InvoicesService', () => {
         calculatedLineAmounts.netAmount.toFixed(2),
       );
       expect(result).toEqual(mockInvoiceWithDetails);
+      expect(logActivityMock).toHaveBeenCalledWith(
+        accountId,
+        ActivityAction.INVOICE_CREATED,
+        mockInvoiceWithDetails.id,
+      );
     });
 
     it('throws NotFoundException when customer profile is missing', async () => {
@@ -417,6 +442,7 @@ describe('InvoicesService', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           InvoicesService,
+          activityLogServiceProvider(),
           {
             provide: PrismaService,
             useValue: {
@@ -479,6 +505,11 @@ describe('InvoicesService', () => {
       expect(updateCall.data.lineItems.deleteMany).toEqual({});
       expect(updateCall.data.lineItems.create).toHaveLength(1);
       expect(updateCall.data.lineItems.create[0].name).toBe('Updated Service');
+      expect(logActivityMock).toHaveBeenCalledWith(
+        accountId,
+        ActivityAction.INVOICE_UPDATED,
+        mockInvoice.id,
+      );
     });
 
     it('throws NotFoundException when invoice is missing or not owned', async () => {
@@ -563,6 +594,7 @@ describe('InvoicesService', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           InvoicesService,
+          activityLogServiceProvider(),
           {
             provide: PrismaService,
             useValue: {
@@ -612,6 +644,7 @@ describe('InvoicesService', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           InvoicesService,
+          activityLogServiceProvider(),
           {
             provide: PrismaService,
             useValue: {
@@ -679,6 +712,7 @@ describe('InvoicesService', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           InvoicesService,
+          activityLogServiceProvider(),
           {
             provide: PrismaService,
             useValue: {
@@ -721,6 +755,11 @@ describe('InvoicesService', () => {
         },
       });
       expect(result.status).toBe(InvoiceStatus.VERIFIED);
+      expect(logActivityMock).toHaveBeenCalledWith(
+        managerAccountId,
+        ActivityAction.INVOICE_VERIFIED,
+        mockInvoice.id,
+      );
     });
 
     it('returns existing invoice without update when already VERIFIED', async () => {
@@ -739,6 +778,7 @@ describe('InvoicesService', () => {
 
       expect(invoiceUpdate).not.toHaveBeenCalled();
       expect(result).toEqual(verifiedInvoice);
+      expect(logActivityMock).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when invoice is missing', async () => {
@@ -747,6 +787,8 @@ describe('InvoicesService', () => {
       await expect(
         invoicesService.verify(managerAccountId, mockInvoice.id),
       ).rejects.toThrow(new NotFoundException('Invoice not found'));
+
+      expect(logActivityMock).not.toHaveBeenCalled();
     });
   });
 
@@ -762,6 +804,7 @@ describe('InvoicesService', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           InvoicesService,
+          activityLogServiceProvider(),
           {
             provide: PrismaService,
             useValue: {
@@ -839,6 +882,7 @@ describe('InvoicesService', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           InvoicesService,
+          activityLogServiceProvider(),
           {
             provide: PrismaService,
             useValue: {
