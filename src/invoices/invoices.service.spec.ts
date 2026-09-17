@@ -602,6 +602,154 @@ describe('InvoicesService', () => {
     });
   });
 
+  describe('findForManager', () => {
+    const invoiceFindMany = jest.fn();
+    let invoicesService: InvoicesService;
+
+    beforeEach(async () => {
+      invoiceFindMany.mockReset();
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          InvoicesService,
+          {
+            provide: PrismaService,
+            useValue: {
+              invoice: { findMany: invoiceFindMany },
+            },
+          },
+        ],
+      }).compile();
+
+      invoicesService = module.get<InvoicesService>(InvoicesService);
+    });
+
+    it('filters by issueDate for explicit year and month', async () => {
+      invoiceFindMany.mockResolvedValue([mockInvoiceWithDetails]);
+
+      const result = await invoicesService.findForManager({
+        year: 2026,
+        month: 8,
+      });
+
+      expect(invoiceFindMany).toHaveBeenCalledWith({
+        where: {
+          issueDate: {
+            gte: new Date(Date.UTC(2026, 7, 1)),
+            lt: new Date(Date.UTC(2026, 8, 1)),
+          },
+        },
+        include: invoiceDetailsInclude,
+        orderBy: { issueDate: 'desc' },
+      });
+      expect(result).toEqual([mockInvoiceWithDetails]);
+    });
+
+    it('defaults to previous calendar month when query is empty', async () => {
+      jest.useFakeTimers({ now: new Date(Date.UTC(2026, 8, 17)) });
+      invoiceFindMany.mockResolvedValue([]);
+
+      await invoicesService.findForManager({});
+
+      expect(invoiceFindMany).toHaveBeenCalledWith({
+        where: {
+          issueDate: {
+            gte: new Date(Date.UTC(2026, 7, 1)),
+            lt: new Date(Date.UTC(2026, 8, 1)),
+          },
+        },
+        include: invoiceDetailsInclude,
+        orderBy: { issueDate: 'desc' },
+      });
+
+      jest.useRealTimers();
+    });
+  });
+
+  describe('verify', () => {
+    const invoiceFindUnique = jest.fn();
+    const invoiceUpdate = jest.fn();
+    let invoicesService: InvoicesService;
+    const managerAccountId = 'manager-account-id';
+
+    beforeEach(async () => {
+      invoiceFindUnique.mockReset();
+      invoiceUpdate.mockReset();
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          InvoicesService,
+          {
+            provide: PrismaService,
+            useValue: {
+              invoice: {
+                findUnique: invoiceFindUnique,
+                update: invoiceUpdate,
+              },
+            },
+          },
+        ],
+      }).compile();
+
+      invoicesService = module.get<InvoicesService>(InvoicesService);
+    });
+
+    it('marks invoice as VERIFIED with verifier metadata', async () => {
+      invoiceFindUnique.mockResolvedValue({
+        ...mockInvoiceWithDetails,
+        status: InvoiceStatus.ISSUED,
+      });
+      invoiceUpdate.mockResolvedValue({
+        ...mockInvoiceWithDetails,
+        status: InvoiceStatus.VERIFIED,
+        verifiedByAccountId: managerAccountId,
+        verifiedAt: new Date('2026-09-17T10:00:00.000Z'),
+      });
+
+      const result = await invoicesService.verify(
+        managerAccountId,
+        mockInvoice.id,
+      );
+
+      expect(invoiceUpdate).toHaveBeenCalledWith({
+        where: { id: mockInvoice.id },
+        include: invoiceDetailsInclude,
+        data: {
+          status: InvoiceStatus.VERIFIED,
+          verifiedAt: expect.any(Date) as Date,
+          verifiedByAccountId: managerAccountId,
+        },
+      });
+      expect(result.status).toBe(InvoiceStatus.VERIFIED);
+    });
+
+    it('returns existing invoice without update when already VERIFIED', async () => {
+      const verifiedInvoice = {
+        ...mockInvoiceWithDetails,
+        status: InvoiceStatus.VERIFIED,
+        verifiedByAccountId: managerAccountId,
+        verifiedAt: new Date('2026-09-16T10:00:00.000Z'),
+      };
+      invoiceFindUnique.mockResolvedValue(verifiedInvoice);
+
+      const result = await invoicesService.verify(
+        managerAccountId,
+        mockInvoice.id,
+      );
+
+      expect(invoiceUpdate).not.toHaveBeenCalled();
+      expect(result).toEqual(verifiedInvoice);
+    });
+
+    it('throws NotFoundException when invoice is missing', async () => {
+      invoiceFindUnique.mockResolvedValue(null);
+
+      await expect(
+        invoicesService.verify(managerAccountId, mockInvoice.id),
+      ).rejects.toThrow(new NotFoundException('Invoice not found'));
+    });
+  });
+
   describe('findById', () => {
     const customerFindUnique = jest.fn();
     const invoiceFindUnique = jest.fn();

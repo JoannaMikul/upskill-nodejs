@@ -8,8 +8,10 @@ import {
   buildCreateInvoicePayload,
   createContractorAsManager,
   createTestActors,
+  defaultSellerProfile,
   e2eRequest,
   loginUser,
+  MANAGER_EMAIL,
   registerUser,
   setupE2eSuite,
   upsertSellerProfileForCustomer,
@@ -27,6 +29,7 @@ describe('Invoices', () => {
 
   beforeAll(async () => {
     actors = await createTestActors(e2e.app, customerCredentials);
+    await e2e.prisma.contractor.deleteMany();
     await upsertSellerProfileForCustomer(e2e.app, actors.customerToken);
     contractor = await createContractorAsManager(e2e.app, actors.managerToken);
   });
@@ -300,6 +303,10 @@ describe('Invoices', () => {
     await upsertSellerProfileForCustomer(
       e2e.app,
       (await loginUser(e2e.app, otherCustomerCredentials)).accessToken,
+      {
+        ...defaultSellerProfile,
+        nip: '701-006-95-86',
+      },
     );
     const otherLogin = await loginUser(e2e.app, otherCustomerCredentials);
 
@@ -312,6 +319,85 @@ describe('Invoices', () => {
     expect(response.body as ErrorResponseDto).toMatchObject({
       statusCode: 404,
       message: 'Invoice not found',
+    });
+  });
+
+  it('lists invoices for manager by issueDate month via GET /invoices', async () => {
+    const response = await e2eRequest(e2e.app)
+      .get('/invoices')
+      .query({ year: 2026, month: 9 })
+      .set('Authorization', authHeader(actors.managerToken))
+      .expect(200);
+
+    const body = response.body as InvoiceResponseDto[];
+
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.some((invoice) => invoice.invoiceNumber === 'INV/2/2026')).toBe(
+      true,
+    );
+  });
+
+  it('returns 403 when customer calls GET /invoices', async () => {
+    await e2eRequest(e2e.app)
+      .get('/invoices')
+      .set('Authorization', authHeader(actors.customerToken))
+      .expect(403);
+  });
+
+  it('returns 400 when only year is provided on GET /invoices', async () => {
+    const response = await e2eRequest(e2e.app)
+      .get('/invoices')
+      .query({ year: 2026 })
+      .set('Authorization', authHeader(actors.managerToken))
+      .expect(400);
+
+    expect(response.body as ErrorResponseDto).toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it('verifies invoice and blocks further customer edits', async () => {
+    const createResponse = await e2eRequest(e2e.app)
+      .post('/invoices')
+      .set('Authorization', authHeader(actors.customerToken))
+      .send(
+        buildCreateInvoicePayload(contractor.id, {
+          invoiceNumber: `INV/VERIFY/${Date.now()}`,
+        }),
+      )
+      .expect(201);
+
+    const invoiceId = (createResponse.body as InvoiceResponseDto).id;
+
+    const verifyResponse = await e2eRequest(e2e.app)
+      .patch(`/invoices/${invoiceId}/verify`)
+      .set('Authorization', authHeader(actors.managerToken))
+      .expect(200);
+
+    const verified = verifyResponse.body as InvoiceResponseDto;
+
+    const managerAccount = await e2e.prisma.account.findUnique({
+      where: { email: MANAGER_EMAIL },
+    });
+
+    expect(verified.status).toBe('VERIFIED');
+    expect(verified.verifiedByAccountId).toBe(managerAccount!.id);
+    expect(verified.verifiedAt).not.toBeNull();
+
+    await e2eRequest(e2e.app)
+      .patch(`/invoices/${invoiceId}/verify`)
+      .set('Authorization', authHeader(actors.managerToken))
+      .expect(200);
+
+    const patchResponse = await e2eRequest(e2e.app)
+      .patch(`/invoices/${invoiceId}`)
+      .set('Authorization', authHeader(actors.customerToken))
+      .send(buildCreateInvoicePayload(contractor.id))
+      .expect(409);
+
+    expect(patchResponse.body as ErrorResponseDto).toMatchObject({
+      statusCode: 409,
+      message: 'Verified invoice cannot be updated',
     });
   });
 

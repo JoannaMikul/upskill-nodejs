@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
@@ -15,6 +16,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../common/types/authenticated-user.interface';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
+import { InvoicesListQueryDto } from './dto/invoices-list-query.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { mapCreateInvoiceDtoToInput } from './mappers/create-invoice.mapper';
 import { mapUpdateInvoiceDtoToInput } from './mappers/update-invoice.mapper';
@@ -39,6 +41,16 @@ export class InvoicesController {
     return toInvoiceResponseDto(invoice);
   }
 
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.MANAGER)
+  async findForManager(
+    @Query() query: InvoicesListQueryDto,
+  ): Promise<InvoiceResponseDto[]> {
+    const invoices = await this.invoicesService.findForManager(query);
+    return invoices.map(toInvoiceResponseDto);
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.CUSTOMER)
@@ -47,6 +59,17 @@ export class InvoicesController {
   ): Promise<InvoiceResponseDto[]> {
     const invoices = await this.invoicesService.findMyInvoices(user.sub);
     return invoices.map(toInvoiceResponseDto);
+  }
+
+  @Patch(':id/verify')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.MANAGER)
+  async verify(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<InvoiceResponseDto> {
+    const invoice = await this.invoicesService.verify(user.sub, id);
+    return toInvoiceResponseDto(invoice);
   }
 
   @Patch(':id')

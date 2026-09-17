@@ -20,8 +20,13 @@ import {
   invoiceDetailsInclude,
   type InvoiceWithDetails,
 } from './model/invoice-with-details';
+import type { InvoicesListQuery } from './dto/invoices-list-query.dto';
 import type { CreateInvoiceInput } from './model/create-invoice.input';
 import type { UpdateInvoiceInput } from './model/update-invoice.input';
+import {
+  getIssueDateRangeForCalendarMonth,
+  getPreviousCalendarMonth,
+} from './utils/manager-invoice-month';
 
 type CustomerWithAccount = Customer & { account: Account };
 
@@ -228,6 +233,63 @@ export class InvoicesService {
     });
 
     return invoices.map(assertInvoiceWithDetails);
+  }
+
+  async findForManager(
+    query: InvoicesListQuery = {},
+  ): Promise<InvoiceWithDetails[]> {
+    const { year, month } =
+      query.year !== undefined && query.month !== undefined
+        ? { year: query.year, month: query.month }
+        : getPreviousCalendarMonth();
+
+    const { start, endExclusive } = getIssueDateRangeForCalendarMonth(
+      year,
+      month,
+    );
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        issueDate: {
+          gte: start,
+          lt: endExclusive,
+        },
+      },
+      include: invoiceDetailsInclude,
+      orderBy: { issueDate: 'desc' },
+    });
+
+    return invoices.map(assertInvoiceWithDetails);
+  }
+
+  async verify(
+    managerAccountId: string,
+    invoiceId: string,
+  ): Promise<InvoiceWithDetails> {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: invoiceDetailsInclude,
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    if (invoice.status === InvoiceStatus.VERIFIED) {
+      return assertInvoiceWithDetails(invoice);
+    }
+
+    const verifiedInvoice = await this.prisma.invoice.update({
+      where: { id: invoiceId },
+      include: invoiceDetailsInclude,
+      data: {
+        status: InvoiceStatus.VERIFIED,
+        verifiedAt: new Date(),
+        verifiedByAccountId: managerAccountId,
+      },
+    });
+
+    return assertInvoiceWithDetails(verifiedInvoice);
   }
 
   async findById(
