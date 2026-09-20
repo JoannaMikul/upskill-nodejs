@@ -214,26 +214,36 @@ export async function createE2eApp(): Promise<{
   return { app, prisma };
 }
 
+const testAccountEmailNotManager = {
+  email: {
+    not: MANAGER_EMAIL,
+  },
+};
+
+const testCustomerViaAccountFilter = {
+  customer: {
+    account: testAccountEmailNotManager,
+  },
+};
+
 export async function cleanupTestInvoicesAndNotifications(
   prisma: PrismaService,
 ): Promise<void> {
-  const testCustomerFilter = {
-    customer: {
-      account: {
-        email: {
-          not: MANAGER_EMAIL,
-        },
-      },
+  await prisma.activityLog.deleteMany({
+    where: {
+      account: testAccountEmailNotManager,
     },
-  };
+  });
 
   await prisma.notification.deleteMany({
-    where: testCustomerFilter,
+    where: testCustomerViaAccountFilter,
   });
 
   await prisma.invoice.deleteMany({
-    where: testCustomerFilter,
+    where: testCustomerViaAccountFilter,
   });
+
+  await prisma.contractor.deleteMany();
 }
 
 export async function cleanupTestUsers(prisma: PrismaService): Promise<void> {
