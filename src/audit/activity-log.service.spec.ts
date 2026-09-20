@@ -17,10 +17,12 @@ const mockActivityLog: ActivityLog = {
 
 describe('ActivityLogService', () => {
   const create = jest.fn();
+  const findMany = jest.fn();
   let activityLogService: ActivityLogService;
 
   beforeEach(async () => {
     create.mockReset();
+    findMany.mockReset();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -28,7 +30,7 @@ describe('ActivityLogService', () => {
         {
           provide: PrismaService,
           useValue: {
-            activityLog: { create },
+            activityLog: { create, findMany },
           },
         },
       ],
@@ -78,6 +80,31 @@ describe('ActivityLogService', () => {
         },
       });
       expect(result.invoiceId).toBe(invoiceId);
+    });
+  });
+
+  describe('findActivityLogs', () => {
+    it('returns entries ordered by createdAt desc without filter', async () => {
+      findMany.mockResolvedValue([mockActivityLog]);
+
+      const result = await activityLogService.findActivityLogs({});
+
+      expect(findMany).toHaveBeenCalledWith({
+        where: undefined,
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(result).toEqual([mockActivityLog]);
+    });
+
+    it('filters by accountId when provided in query', async () => {
+      findMany.mockResolvedValue([mockActivityLog]);
+
+      await activityLogService.findActivityLogs({ accountId });
+
+      expect(findMany).toHaveBeenCalledWith({
+        where: { accountId },
+        orderBy: { createdAt: 'desc' },
+      });
     });
   });
 });
