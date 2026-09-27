@@ -1,11 +1,26 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Account } from '@prisma/client';
 import { NotificationChannel, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { UpdateNotificationPreferencesInput } from './model/update-notification-preferences.input';
 import { PrismaService } from '../prisma/prisma.service';
+import type { UpdateAccessInput } from './model/update-access.input';
+import type { UpdateNotificationPreferencesInput } from './model/update-notification-preferences.input';
+import type { UpsertSellerProfileInput } from './model/upsert-seller-profile.input';
 
 const BCRYPT_ROUNDS = 12;
+
+const accountWithCustomerInclude = {
+  customer: {
+    include: {
+      sellerProfile: true,
+    },
+  },
+};
 
 @Injectable()
 export class UsersService {
@@ -14,7 +29,7 @@ export class UsersService {
   async findById(id: string): Promise<Account> {
     const account = await this.prisma.account.findUnique({
       where: { id },
-      include: { customer: true },
+      include: accountWithCustomerInclude,
     });
 
     if (!account) {
@@ -22,6 +37,83 @@ export class UsersService {
     }
 
     return account;
+  }
+
+  async findAllCustomers(): Promise<Account[]> {
+    return this.prisma.account.findMany({
+      where: { role: Role.CUSTOMER },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async updateAccess(
+    accountId: string,
+    input: UpdateAccessInput,
+  ): Promise<Account> {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+    });
+
+    if (!account) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (account.role !== Role.CUSTOMER) {
+      throw new BadRequestException(
+        'Access can only be changed for customer accounts',
+      );
+    }
+
+    return this.prisma.account.update({
+      where: { id: accountId },
+      data: { isActive: input.isActive },
+      include: accountWithCustomerInclude,
+    });
+  }
+
+  async upsertSellerProfile(
+    accountId: string,
+    input: UpsertSellerProfileInput,
+  ): Promise<Account> {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      include: { customer: { include: { sellerProfile: true } } },
+    });
+
+    if (!account) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!account.customer) {
+      throw new NotFoundException('Customer profile not found');
+    }
+
+    await this.assertSellerNipAvailable(
+      input.nip,
+      account.customer.sellerProfile?.id,
+    );
+
+    await this.prisma.sellerProfile.upsert({
+      where: { customerId: account.customer.id },
+      create: {
+        customerId: account.customer.id,
+        name: input.name,
+        nip: input.nip,
+        address: input.address,
+        bankAccountNumber: input.bankAccountNumber ?? null,
+      },
+      update: {
+        name: input.name,
+        nip: input.nip,
+        address: input.address,
+        bankAccountNumber: input.bankAccountNumber ?? null,
+      },
+    });
+
+    return this.prisma.account.findUniqueOrThrow({
+      where: { id: accountId },
+      include: accountWithCustomerInclude,
+    });
   }
 
   async updateNotificationPreferences(
@@ -57,13 +149,14 @@ export class UsersService {
 
     return this.prisma.account.findUniqueOrThrow({
       where: { id: accountId },
-      include: { customer: true },
+      include: accountWithCustomerInclude,
     });
   }
 
   async findByEmail(email: string): Promise<Account> {
     const account = await this.prisma.account.findUnique({
       where: { email: email.toLowerCase() },
+      include: accountWithCustomerInclude,
     });
 
     if (!account) {
@@ -83,11 +176,13 @@ export class UsersService {
         update: {
           passwordHash,
           role: Role.MANAGER,
+          isActive: true,
         },
         create: {
           email: normalizedEmail,
           passwordHash,
           role: Role.MANAGER,
+          isActive: true,
         },
       });
 
@@ -99,5 +194,18 @@ export class UsersService {
 
       return account;
     });
+  }
+
+  private async assertSellerNipAvailable(
+    nip: string,
+    excludeSellerProfileId?: string,
+  ): Promise<void> {
+    const existing = await this.prisma.sellerProfile.findUnique({
+      where: { nip },
+    });
+
+    if (existing && existing.id !== excludeSellerProfileId) {
+      throw new ConflictException('NIP already registered');
+    }
   }
 }

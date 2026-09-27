@@ -1,5 +1,5 @@
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { ActivityAction, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { createAuthServiceTestContext } from '../test/create-auth-service-test-context';
 import { createMockAccount } from '../test/create-mock-account';
@@ -32,6 +32,7 @@ describe('AuthService', () => {
           email: 'test@example.com',
           passwordHash: 'hashed-password',
           role: Role.CUSTOMER,
+          isActive: false,
           customer: {
             create: {},
           },
@@ -61,7 +62,7 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('returns access token and account on valid credentials', async () => {
-      const { authService, prismaService, jwtService } =
+      const { authService, prismaService, jwtService, logActivityMock } =
         await createAuthServiceTestContext();
       const mockAccount = createMockAccount();
 
@@ -77,6 +78,10 @@ describe('AuthService', () => {
         sub: mockAccount.id,
         role: mockAccount.role,
       });
+      expect(logActivityMock).toHaveBeenCalledWith(
+        mockAccount.id,
+        ActivityAction.LOGIN,
+      );
       expect(result).toEqual({
         accessToken: 'mock-jwt-token',
         account: mockAccount,
@@ -84,7 +89,7 @@ describe('AuthService', () => {
     });
 
     it('rejects login when password does not match and does not sign access token', async () => {
-      const { authService, prismaService, jwtService } =
+      const { authService, prismaService, jwtService, logActivityMock } =
         await createAuthServiceTestContext();
       const mockAccount = createMockAccount();
 
@@ -99,10 +104,30 @@ describe('AuthService', () => {
       ).rejects.toThrow(UnauthorizedException);
 
       expect(jwtService.sign).not.toHaveBeenCalled();
+      expect(logActivityMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects login when account is inactive with UnauthorizedException', async () => {
+      const { authService, prismaService, jwtService, logActivityMock } =
+        await createAuthServiceTestContext();
+      const mockAccount = createMockAccount({ isActive: false });
+
+      prismaService.account.findUnique.mockResolvedValue(mockAccount);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        authService.login({
+          email: 'test@example.com',
+          password: 'password123',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(jwtService.sign).not.toHaveBeenCalled();
+      expect(logActivityMock).not.toHaveBeenCalled();
     });
 
     it('rejects login when user does not exist with UnauthorizedException', async () => {
-      const { authService, prismaService } =
+      const { authService, prismaService, logActivityMock } =
         await createAuthServiceTestContext();
 
       prismaService.account.findUnique.mockResolvedValue(null);
@@ -113,6 +138,8 @@ describe('AuthService', () => {
           password: 'password123',
         }),
       ).rejects.toThrow(UnauthorizedException);
+
+      expect(logActivityMock).not.toHaveBeenCalled();
     });
   });
 });

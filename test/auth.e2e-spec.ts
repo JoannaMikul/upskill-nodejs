@@ -4,7 +4,9 @@ import type {
   UserResponseDto,
 } from './e2e-setup';
 import {
+  activateCustomer,
   e2eRequest,
+  loginUser,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
   setupE2eSuite,
@@ -18,7 +20,7 @@ const customer = {
 describe('Auth', () => {
   const e2e = setupE2eSuite({ cleanupAfterEach: true });
 
-  it('registers a Customer and returns 201 without access token', async () => {
+  it('registers a Customer as inactive and returns 201 without access token', async () => {
     const response = await e2eRequest(e2e.app)
       .post('/auth/register')
       .send(customer)
@@ -29,6 +31,7 @@ describe('Auth', () => {
     expect(body).toMatchObject({
       email: customer.email,
       role: 'CUSTOMER',
+      isActive: false,
     });
     expect(body).toHaveProperty('id');
     expect(body).not.toHaveProperty('passwordHash');
@@ -51,11 +54,26 @@ describe('Auth', () => {
     expect(body.user).toMatchObject({
       email: MANAGER_EMAIL,
       role: 'MANAGER',
+      isActive: true,
     });
   });
 
-  it('logs in registered Customer and returns JWT', async () => {
-    await e2eRequest(e2e.app).post('/auth/register').send(customer).expect(201);
+  it('logs in registered Customer after Manager activation and returns JWT', async () => {
+    const registerResponse = await e2eRequest(e2e.app)
+      .post('/auth/register')
+      .send(customer)
+      .expect(201);
+
+    const registered = registerResponse.body as UserResponseDto;
+
+    await e2eRequest(e2e.app).post('/auth/login').send(customer).expect(401);
+
+    const managerLogin = await loginUser(e2e.app, {
+      email: MANAGER_EMAIL,
+      password: MANAGER_PASSWORD,
+    });
+
+    await activateCustomer(e2e.app, managerLogin.accessToken, registered.id);
 
     const response = await e2eRequest(e2e.app)
       .post('/auth/login')
@@ -68,6 +86,7 @@ describe('Auth', () => {
     expect(body.user).toMatchObject({
       email: customer.email,
       role: 'CUSTOMER',
+      isActive: true,
     });
   });
 

@@ -3,9 +3,12 @@ import { InvoiceReminderService } from '../src/cron/invoice-reminder.service';
 import type { TestActors, UserResponseDto } from './e2e-setup';
 import {
   authHeader,
+  buildCreateInvoicePayload,
+  createContractorAsManager,
   createTestActors,
   e2eRequest,
   setupE2eSuite,
+  upsertSellerProfileForCustomer,
 } from './e2e-setup';
 
 const customerCredentials = {
@@ -23,6 +26,7 @@ describe('Notifications', () => {
 
   beforeAll(async () => {
     actors = await createTestActors(e2e.app, customerCredentials);
+    await upsertSellerProfileForCustomer(e2e.app, actors.customerToken);
     referenceDate = new Date();
     monthLabel = new Date(
       referenceDate.getFullYear(),
@@ -82,9 +86,27 @@ describe('Notifications', () => {
       body: `Reminder: you have not submitted an invoice for ${monthLabel}. Please submit it before month end.`,
     });
 
+    const contractor = await createContractorAsManager(
+      e2e.app,
+      actors.managerToken,
+      {
+        name: 'Notification Buyer Ltd.',
+        nip: '526-025-02-74',
+        address: '15 Buyer Street',
+        postalCode: '00-003',
+        city: 'Warsaw',
+        country: 'PL',
+      },
+    );
+
     await e2eRequest(e2e.app)
       .post('/invoices')
       .set('Authorization', authHeader(actors.customerToken))
+      .send(
+        buildCreateInvoicePayload(contractor.id, {
+          invoiceNumber: 'INV/NOTIFY/2026',
+        }),
+      )
       .expect(201);
 
     await reminderService.run(referenceDate);
