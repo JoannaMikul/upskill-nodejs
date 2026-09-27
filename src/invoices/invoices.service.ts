@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Account, Customer, Invoice } from '@prisma/client';
+import type { Account, Customer, Invoice } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 type CustomerWithAccount = Customer & { account: Account };

@@ -1,12 +1,11 @@
 import { NotificationChannel } from '@prisma/client';
 import { InvoiceReminderService } from '../src/cron/invoice-reminder.service';
+import type { TestActors, UserResponseDto } from './e2e-setup';
 import {
   authHeader,
   createTestActors,
   e2eRequest,
   setupE2eSuite,
-  TestActors,
-  UserResponseDto,
 } from './e2e-setup';
 
 const customerCredentials = {

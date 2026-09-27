@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Role } from '@prisma/client';
-import { AuthenticatedUser } from '../types/authenticated-user.interface';
+import type { AuthenticatedUser } from '../types/authenticated-user.interface';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
 @Injectable()

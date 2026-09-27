@@ -8,11 +8,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
+import {
+  UpdateNotificationPreferencesSchema,
+  type UpdateNotificationPreferences,
+} from './dto/update-notification-preferences.dto';
 import { UserByEmailQueryDto } from './dto/user-by-email-query.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { mapUpdateNotificationPreferencesDtoToInput } from './mappers/update-notification-preferences.mapper';
@@ -38,7 +42,8 @@ export class UsersController {
   @Roles(Role.CUSTOMER)
   async updateNotificationPreferences(
     @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: UpdateNotificationPreferencesDto,
+    @Body(new ZodValidationPipe(UpdateNotificationPreferencesSchema))
+    dto: UpdateNotificationPreferences,
   ): Promise<UserResponseDto> {
     const account = await this.usersService.updateNotificationPreferences(
       user.sub,

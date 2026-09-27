@@ -1,11 +1,12 @@
-import { INestApplication } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
+import type { TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import supertest from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
-import { AuthLoginResponseDto } from '../src/auth/dto/auth-login-response.dto';
-import { ErrorResponseDto } from '../src/common/filters/http-exception.filter';
-import { UserResponseDto } from '../src/users/dto/user-response.dto';
+import type { AuthLoginResponseDto } from '../src/auth/dto/auth-login-response.dto';
+import type { ErrorResponseDto } from '../src/common/filters/http-exception.filter';
+import type { UserResponseDto } from '../src/users/dto/user-response.dto';
 import { UsersService } from '../src/users/users.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 

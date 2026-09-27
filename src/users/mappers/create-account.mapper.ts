@@ -1,5 +1,5 @@
 import { Role } from '@prisma/client';
-import { CreateAccountInput } from '../model/create-account.input';
+import type { CreateAccountInput } from '../model/create-account.input';
 
 export function mapToCreateAccountInput(
   email: string,

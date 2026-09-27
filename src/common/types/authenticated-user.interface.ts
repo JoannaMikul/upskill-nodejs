@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import type { Role } from '@prisma/client';
 
 export interface JwtPayload {
   /** JWT "subject" claim — the authenticated user's id (UUID). */

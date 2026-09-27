@@ -1,11 +1,13 @@
-import {
+import type {
   AuthLoginResponseDto,
-  e2eRequest,
   ErrorResponseDto,
+  UserResponseDto,
+} from './e2e-setup';
+import {
+  e2eRequest,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
   setupE2eSuite,
-  UserResponseDto,
 } from './e2e-setup';
 
 const customer = {

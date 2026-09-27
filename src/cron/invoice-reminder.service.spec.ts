@@ -1,7 +1,9 @@
-import { Account, Customer, NotificationChannel, Role } from '@prisma/client';
+import type { Account, Customer } from '@prisma/client';
+import { NotificationChannel, Role } from '@prisma/client';
 import { createMockAccount } from '../test/create-mock-account';
-import { InvoicesService } from '../invoices/invoices.service';
-import { NotificationHandler } from '../notifications/services/notification.handler';
+import type { InvoicesService } from '../invoices/invoices.service';
+import type { NotificationHandler } from '../notifications/services/notification.handler';
+import { CustomerNotificationRecipientResolver } from '../notifications/services/customer-notification-recipient-resolver.service';
 import { InvoiceReminderService } from './invoice-reminder.service';
 
 type CustomerWithAccount = Customer & { account: Account };
@@ -46,9 +48,12 @@ describe('InvoiceReminderService', () => {
     handle,
   } as unknown as NotificationHandler;
 
+  const recipientResolver = new CustomerNotificationRecipientResolver();
+
   const service = new InvoiceReminderService(
     invoicesService,
     notificationHandler,
+    recipientResolver,
   );
 
   beforeEach(() => {

@@ -1,5 +1,5 @@
-import { Account, Customer } from '@prisma/client';
-import { UserResponseDto } from '../dto/user-response.dto';
+import type { Account, Customer } from '@prisma/client';
+import type { UserResponseDto } from '../dto/user-response.dto';
 
 type AccountWithCustomer = Account & {
   customer?: Pick<Customer, 'notificationChannel' | 'phoneNumber'> | null;

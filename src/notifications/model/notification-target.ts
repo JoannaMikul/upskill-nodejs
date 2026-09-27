@@ -1,9 +1,8 @@
 import type { NotificationChannel } from '@prisma/client';
 
-export type OutboundNotification = {
+export type NotificationTarget = {
   customerId: string;
   channel: NotificationChannel;
-  recipient: string;
-  subject: string;
-  body: string;
+  email: string;
+  phoneNumber: string | null;
 };

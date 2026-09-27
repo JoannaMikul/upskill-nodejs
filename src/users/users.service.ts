@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Account, NotificationChannel, Role } from '@prisma/client';
+import type { Account } from '@prisma/client';
+import { NotificationChannel, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { UpdateNotificationPreferencesInput } from './model/update-notification-preferences.input';
 import { PrismaService } from '../prisma/prisma.service';
@@ -42,13 +43,16 @@ export class UsersService {
 
     await this.prisma.customer.update({
       where: { accountId },
-      data: {
-        notificationChannel: input.notificationChannel,
-        phoneNumber:
-          input.notificationChannel === NotificationChannel.SMS
-            ? input.phoneNumber
-            : null,
-      },
+      data:
+        input.notificationChannel === NotificationChannel.SMS
+          ? {
+              notificationChannel: NotificationChannel.SMS,
+              phoneNumber: input.phoneNumber,
+            }
+          : {
+              notificationChannel: NotificationChannel.EMAIL,
+              phoneNumber: null,
+            },
     });
 
     return this.prisma.account.findUniqueOrThrow({

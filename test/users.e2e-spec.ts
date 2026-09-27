@@ -1,11 +1,13 @@
+import type {
+  ErrorResponseDto,
+  TestActors,
+  UserResponseDto,
+} from './e2e-setup';
 import {
   authHeader,
   createTestActors,
   e2eRequest,
-  ErrorResponseDto,
   setupE2eSuite,
-  TestActors,
-  UserResponseDto,
 } from './e2e-setup';
 
 const customerCredentials = {

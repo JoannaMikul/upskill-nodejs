@@ -1,8 +1,8 @@
 import { NotificationChannel } from '@prisma/client';
-import { OutboundNotification } from '../model/outbound-notification';
+import type { OutboundNotification } from '../model/outbound-notification';
 import type { NotificationRepository } from '../ports/notification-repository.port';
 import type { NotificationSender } from '../ports/notification-sender.port';
-import { NotificationDispatcherService } from './notification-dispatcher.service';
+import type { NotificationSenderFactory } from '../ports/notification-sender-factory.port';
 import { NotificationHandler } from './notification.handler';
 
 const notification: OutboundNotification = {
@@ -15,24 +15,29 @@ const notification: OutboundNotification = {
 
 describe('NotificationHandler', () => {
   const push = jest.fn().mockResolvedValue(undefined);
-  const getSender = jest.fn();
+  const create = jest.fn();
   const save = jest.fn().mockResolvedValue(undefined);
 
   const sender: NotificationSender = { push };
-  const dispatcher = { getSender } as unknown as NotificationDispatcherService;
+  const senderFactory = {
+    create,
+  } as unknown as NotificationSenderFactory;
   const notificationRepository: NotificationRepository = { save };
 
-  const handler = new NotificationHandler(dispatcher, notificationRepository);
+  const handler = new NotificationHandler(
+    senderFactory,
+    notificationRepository,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
-    getSender.mockReturnValue(sender);
+    create.mockReturnValue(sender);
   });
 
-  it('selects sender by channel, pushes notification, then saves it', async () => {
+  it('creates sender by channel, pushes notification, then saves it', async () => {
     await handler.handle(notification);
 
-    expect(getSender).toHaveBeenCalledWith(NotificationChannel.EMAIL);
+    expect(create).toHaveBeenCalledWith(NotificationChannel.EMAIL);
     expect(push).toHaveBeenCalledWith(notification);
     expect(save).toHaveBeenCalledWith(notification);
   });
