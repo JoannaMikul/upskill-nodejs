@@ -1,5 +1,7 @@
 # Invoice Management Platform
 
+[![CI](https://github.com/JoannaMikul/upskill-nodejs/actions/workflows/ci.yml/badge.svg)](https://github.com/JoannaMikul/upskill-nodejs/actions/workflows/ci.yml)
+
 NestJS 11 REST API for user management, monthly invoice submission, and automated reminders. JWT authentication with role-based access (`MANAGER`, `CUSTOMER`). Training project: PostgreSQL via Prisma, validation with Zod, scheduled jobs with `@nestjs/schedule`, tests with Jest.
 
 ## Requirements
@@ -200,20 +202,78 @@ Reminder message (EN):
 
 Logic lives in `src/cron/` (`CronService` → `InvoiceReminderService` → `NotificationHandler`). Notifications use hexagonal architecture under `src/notifications/` (ports + adapters).
 
+## Docker
+
+The image is multi-stage and based on `node:24.18-bookworm-slim`. `prisma` is a production dependency, so `prisma migrate deploy` runs inside the container. Seeding stays local (`pnpm prisma:seed`) and is not part of the image.
+
+Build and start Postgres, apply migrations, then serve the API on port 3000:
+
+```bash
+docker compose up --build
+```
+
+Build and run the same steps manually:
+
+```bash
+docker build -t upskill-nodejs .
+
+docker run --rm \
+  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/upskill?schema=public \
+  upskill-nodejs \
+  node_modules/.bin/prisma migrate deploy
+
+docker run --rm -p 3000:3000 \
+  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/upskill?schema=public \
+  -e JWT_SECRET=change-me \
+  upskill-nodejs
+```
+
+Pushes to `main` publish the image to GHCR with tags `latest` and `sha-<commit>`:
+
+```bash
+docker pull ghcr.io/joannamikul/upskill-nodejs:latest
+```
+
+## CI/CD
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pull requests to `main`, pushes to `main`, and `workflow_dispatch`. Jobs `lint`, `depcruise`, `audit`, `unit-tests`, `e2e-tests`, and `build` start in parallel. `docker` waits for all of them and pushes to `ghcr.io` only on a push to `main`.
+
+| Job | What it runs |
+| --- | --- |
+| `lint` | `pnpm lint:ci`, `pnpm format:check`, `pnpm typecheck` |
+| `depcruise` | `pnpm depcruise` |
+| `audit` | `pnpm audit:ci` (fails on high production vulnerabilities). Full `pnpm audit` is informational and does not fail the job. |
+| `unit-tests` | `pnpm test:ci`; uploads the `coverage/` artifact |
+| `e2e-tests` | PostgreSQL 17 service, then `pnpm prisma:deploy` and `pnpm test:e2e:ci` |
+| `build` | `pnpm build`; uploads the `dist/` artifact |
+| `docker` | Builds the image. Publishes it only on push to `main`. |
+
+[`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) analyzes JavaScript and TypeScript on pull requests, pushes to `main`, and a weekly schedule.
+
+Dependabot (`.github/dependabot.yml`) opens weekly updates for npm, GitHub Actions, and Docker. Minor and major bumps of the Node base image are ignored, because `engines.node` is pinned to `24.18.x`.
+
 ## Scripts
 
-| Command               | Description                            |
-| --------------------- | -------------------------------------- |
-| `pnpm start:dev`      | Dev server with watch mode             |
-| `pnpm build`          | Compile to `dist/`                     |
-| `pnpm start:prod`     | Run compiled app                       |
-| `pnpm prisma:migrate` | Apply Prisma migrations                |
-| `pnpm prisma:seed`    | Seed Manager account                   |
-| `pnpm prisma:studio`  | Open Prisma Studio                     |
-| `pnpm test`           | Unit tests                             |
-| `pnpm test:e2e`       | End-to-end tests (requires PostgreSQL) |
-| `pnpm lint`           | ESLint                                 |
-| `pnpm format`         | Prettier                               |
+| Command               | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| `pnpm start:dev`      | Dev server with watch mode                       |
+| `pnpm build`          | Compile to `dist/`                               |
+| `pnpm start:prod`     | Run compiled app                                 |
+| `pnpm prisma:migrate` | Create and apply a dev migration                 |
+| `pnpm prisma:deploy`  | Apply existing migrations (`migrate deploy`)     |
+| `pnpm prisma:seed`    | Seed Manager account                             |
+| `pnpm prisma:studio`  | Open Prisma Studio                               |
+| `pnpm test`           | Unit tests                                       |
+| `pnpm test:ci`        | Unit tests in CI mode with coverage              |
+| `pnpm test:e2e`       | End-to-end tests (requires PostgreSQL)           |
+| `pnpm test:e2e:ci`    | End-to-end tests in CI mode                      |
+| `pnpm lint`           | ESLint with `--fix`                              |
+| `pnpm lint:ci`        | ESLint without `--fix`, warnings fail the run    |
+| `pnpm format`         | Prettier write                                   |
+| `pnpm format:check`   | Prettier check                                   |
+| `pnpm typecheck`      | `tsc --noEmit` for `src` and `test`              |
+| `pnpm depcruise`      | Dependency and architecture rules                |
+| `pnpm audit:ci`       | `pnpm audit --prod`, fails on high severity      |
 
 ## Testing
 
