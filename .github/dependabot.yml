@@ -1,0 +1,48 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      nestjs:
+        patterns:
+          - '@nestjs/*'
+      prisma:
+        patterns:
+          - prisma
+          - '@prisma/*'
+      eslint:
+        patterns:
+          - eslint
+          - eslint-*
+          - '@eslint/*'
+          - typescript-eslint
+      jest:
+        patterns:
+          - jest
+          - jest-*
+          - ts-jest
+          - '@types/jest'
+          - supertest
+          - '@types/supertest'
+      dev-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
