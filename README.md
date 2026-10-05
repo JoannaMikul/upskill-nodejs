@@ -43,7 +43,7 @@ Sprint 1 uses short-lived access tokens only — no refresh tokens.
 | -------------- | --------------------------------------------------------------------------- |
 | `Account`      | Login identity: email (unique), password hash, role                         |
 | `Manager`      | 1:1 profile for Manager accounts (seeded, not public)                       |
-| `Customer`     | 1:1 profile created when a Customer registers; notification preferences   |
+| `Customer`     | 1:1 profile created when a Customer registers; notification preferences     |
 | `Invoice`      | Monthly invoice record linked to a Customer (`createdAt` = submission time) |
 | `Notification` | Log of sent reminders (channel, recipient, subject, body, `sentAt`)         |
 
@@ -234,19 +234,69 @@ Pushes to `main` publish the image to GHCR with tags `latest` and `sha-<commit>`
 docker pull ghcr.io/joannamikul/upskill-nodejs:latest
 ```
 
+## Kubernetes (local, kind)
+
+Run the **same Docker image** inside a local Kubernetes cluster ([kind](https://kind.sigs.k8s.io/)). Manifests live in [`k8s/local.yaml`](k8s/local.yaml) — Postgres plus the API. Two **init containers** run before Nest: `wait-for-postgres` (until the DB port is open; Compose has `depends_on`, K8s does not) and `migrate` (`prisma migrate deploy`, like the `migrate` service in `docker-compose.yml`).
+
+**Prerequisites:** Docker, [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), [kubectl](https://kubernetes.io/docs/tasks/tools/). Stop `docker compose` if it already uses port 3000.
+
+Environment values in the YAML are **dev-only** (same passwords as compose). Do not copy them into real deployments.
+
+```bash
+# 1. Create a one-node cluster (context name: kind-kind)
+kind create cluster
+
+# 2. Build the app image and load it into the cluster (kind does not see your host Docker tags by default)
+docker build -t upskill-nodejs .
+kind load docker-image upskill-nodejs
+
+# 3. Create Deployments and Services
+kubectl apply -f k8s/local.yaml
+
+# 4. Wait until both pods are Running (Ctrl+C to leave watch mode)
+kubectl get pods -w
+
+# 5. In another terminal: forward cluster port 3000 to localhost
+kubectl port-forward service/upskill-api 3000:3000
+
+# 6. Smoke test
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"k8s-test@example.com","password":"TestPass123!"}'
+# Expected: 201
+```
+
+Useful commands:
+
+| Command                                                    | What it shows                                        |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| `kubectl get all`                                          | Deployments, pods, services in the default namespace |
+| `kubectl logs deployment/upskill-api -c api`               | NestJS logs                                          |
+| `kubectl logs deployment/upskill-api -c wait-for-postgres` | Wait loop until Postgres is reachable                |
+| `kubectl logs deployment/upskill-api -c migrate`           | Migration output from the init container             |
+| `kubectl describe pod -l app=upskill-api`                  | Why a pod is waiting or restarting                   |
+
+Teardown:
+
+```bash
+kind delete cluster
+```
+
+Manager seed is still local (`pnpm prisma:seed` against Postgres); only registration is required for the smoke test above.
+
 ## CI/CD
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pull requests to `main`, pushes to `main`, and `workflow_dispatch`. Jobs `lint`, `depcruise`, `audit`, `unit-tests`, `e2e-tests`, and `build` start in parallel. `docker` waits for all of them and pushes to `ghcr.io` only on a push to `main`.
 
-| Job | What it runs |
-| --- | --- |
-| `lint` | `pnpm lint:ci`, `pnpm format:check`, `pnpm typecheck` |
-| `depcruise` | `pnpm depcruise` |
-| `audit` | `pnpm audit:ci` (fails on high production vulnerabilities). Full `pnpm audit` is informational and does not fail the job. |
-| `unit-tests` | `pnpm test:ci`; uploads the `coverage/` artifact |
-| `e2e-tests` | PostgreSQL 17 service, then `pnpm prisma:deploy` and `pnpm test:e2e:ci` |
-| `build` | `pnpm build`; uploads the `dist/` artifact |
-| `docker` | Builds the image. Publishes it only on push to `main`. |
+| Job          | What it runs                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `lint`       | `pnpm lint:ci`, `pnpm format:check`, `pnpm typecheck`                                                                     |
+| `depcruise`  | `pnpm depcruise`                                                                                                          |
+| `audit`      | `pnpm audit:ci` (fails on high production vulnerabilities). Full `pnpm audit` is informational and does not fail the job. |
+| `unit-tests` | `pnpm test:ci`; uploads the `coverage/` artifact                                                                          |
+| `e2e-tests`  | PostgreSQL 17 service, then `pnpm prisma:deploy` and `pnpm test:e2e:ci`                                                   |
+| `build`      | `pnpm build`; uploads the `dist/` artifact                                                                                |
+| `docker`     | Builds the image. Publishes it only on push to `main`.                                                                    |
 
 [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) analyzes JavaScript and TypeScript on pull requests, pushes to `main`, and a weekly schedule.
 
@@ -254,26 +304,26 @@ Dependabot (`.github/dependabot.yml`) opens weekly updates for npm, GitHub Actio
 
 ## Scripts
 
-| Command               | Description                                      |
-| --------------------- | ------------------------------------------------ |
-| `pnpm start:dev`      | Dev server with watch mode                       |
-| `pnpm build`          | Compile to `dist/`                               |
-| `pnpm start:prod`     | Run compiled app                                 |
-| `pnpm prisma:migrate` | Create and apply a dev migration                 |
-| `pnpm prisma:deploy`  | Apply existing migrations (`migrate deploy`)     |
-| `pnpm prisma:seed`    | Seed Manager account                             |
-| `pnpm prisma:studio`  | Open Prisma Studio                               |
-| `pnpm test`           | Unit tests                                       |
-| `pnpm test:ci`        | Unit tests in CI mode with coverage              |
-| `pnpm test:e2e`       | End-to-end tests (requires PostgreSQL)           |
-| `pnpm test:e2e:ci`    | End-to-end tests in CI mode                      |
-| `pnpm lint`           | ESLint with `--fix`                              |
-| `pnpm lint:ci`        | ESLint without `--fix`, warnings fail the run    |
-| `pnpm format`         | Prettier write                                   |
-| `pnpm format:check`   | Prettier check                                   |
-| `pnpm typecheck`      | `tsc --noEmit` for `src` and `test`              |
-| `pnpm depcruise`      | Dependency and architecture rules                |
-| `pnpm audit:ci`       | `pnpm audit --prod`, fails on high severity      |
+| Command               | Description                                   |
+| --------------------- | --------------------------------------------- |
+| `pnpm start:dev`      | Dev server with watch mode                    |
+| `pnpm build`          | Compile to `dist/`                            |
+| `pnpm start:prod`     | Run compiled app                              |
+| `pnpm prisma:migrate` | Create and apply a dev migration              |
+| `pnpm prisma:deploy`  | Apply existing migrations (`migrate deploy`)  |
+| `pnpm prisma:seed`    | Seed Manager account                          |
+| `pnpm prisma:studio`  | Open Prisma Studio                            |
+| `pnpm test`           | Unit tests                                    |
+| `pnpm test:ci`        | Unit tests in CI mode with coverage           |
+| `pnpm test:e2e`       | End-to-end tests (requires PostgreSQL)        |
+| `pnpm test:e2e:ci`    | End-to-end tests in CI mode                   |
+| `pnpm lint`           | ESLint with `--fix`                           |
+| `pnpm lint:ci`        | ESLint without `--fix`, warnings fail the run |
+| `pnpm format`         | Prettier write                                |
+| `pnpm format:check`   | Prettier check                                |
+| `pnpm typecheck`      | `tsc --noEmit` for `src` and `test`           |
+| `pnpm depcruise`      | Dependency and architecture rules             |
+| `pnpm audit:ci`       | `pnpm audit --prod`, fails on high severity   |
 
 ## Testing
 
