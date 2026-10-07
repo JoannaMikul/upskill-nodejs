@@ -253,7 +253,8 @@ kind load docker-image upskill-nodejs
 # 3. Create Deployments and Services
 kubectl apply -f k8s/local.yaml
 
-# 4. Wait until both pods are Running (Ctrl+C to leave watch mode)
+# 4. Wait until pods are Running (Ctrl+C to leave watch mode)
+#    Expect two upskill-api pods and one postgres pod
 kubectl get pods -w
 
 # 5. In another terminal: forward cluster port 3000 to localhost
@@ -266,11 +267,23 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/auth/regi
 # Expected: 201
 ```
 
+The API Deployment starts **two pods** (horizontal scale). Postgres stays at one pod. `kubectl port-forward` to the Service often reaches a single pod; `kubectl get endpoints upskill-api` lists both pod addresses behind the Service. The invoice reminder cron starts in every API pod, so two replicas would send the same reminder twice.
+
+```bash
+# Raise the API to three pods, then return to the manifest default
+kubectl scale deployment/upskill-api --replicas=3
+kubectl scale deployment/upskill-api --replicas=2
+
+kubectl get pods
+kubectl get endpoints upskill-api
+```
+
 Useful commands:
 
 | Command                                                    | What it shows                                        |
 | ---------------------------------------------------------- | ---------------------------------------------------- |
 | `kubectl get all`                                          | Deployments, pods, services in the default namespace |
+| `kubectl get endpoints upskill-api`                        | Pod addresses selected by the API Service            |
 | `kubectl logs deployment/upskill-api -c api`               | NestJS logs                                          |
 | `kubectl logs deployment/upskill-api -c wait-for-postgres` | Wait loop until Postgres is reachable                |
 | `kubectl logs deployment/upskill-api -c migrate`           | Migration output from the init container             |
