@@ -1,0 +1,149 @@
+# Local kind stack: Postgres + API + one scheduler pod (same roles as docker-compose.yml, plus a single cron replica).
+# Dev-only credentials — do not reuse in production.
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres
+            - name: POSTGRES_DB
+              value: upskill
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: upskill-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: upskill-api
+  template:
+    metadata:
+      labels:
+        app: upskill-api
+    spec:
+      initContainers:
+        # Compose has depends_on; K8s starts both Deployments at once — wait until Postgres listens.
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres 5432; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+        - name: migrate
+          image: upskill-nodejs
+          imagePullPolicy: IfNotPresent
+          command:
+            - node_modules/.bin/prisma
+            - migrate
+            - deploy
+          env:
+            - name: DATABASE_URL
+              value: postgresql://postgres:postgres@postgres:5432/upskill?schema=public
+      containers:
+        - name: api
+          image: upskill-nodejs
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: DATABASE_URL
+              value: postgresql://postgres:postgres@postgres:5432/upskill?schema=public
+            - name: JWT_SECRET
+              value: docker-smoke-secret
+            - name: CRON_ENABLED
+              value: "false"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: upskill-api
+spec:
+  selector:
+    app: upskill-api
+  ports:
+    - port: 3000
+      targetPort: 3000
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: upskill-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: upskill-scheduler
+  template:
+    metadata:
+      labels:
+        app: upskill-scheduler
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres 5432; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+      containers:
+        - name: scheduler
+          image: upskill-nodejs
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DATABASE_URL
+              value: postgresql://postgres:postgres@postgres:5432/upskill?schema=public
+            - name: JWT_SECRET
+              value: docker-smoke-secret
+            - name: CRON_ENABLED
+              value: "true"

@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: upskill
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d upskill']
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build: .
+    image: upskill-nodejs
+    command:
+      - node_modules/.bin/prisma
+      - migrate
+      - deploy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/upskill?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  app:
+    image: upskill-nodejs
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/upskill?schema=public
+      JWT_SECRET: docker-smoke-secret
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
