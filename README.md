@@ -34,6 +34,7 @@ The API listens on `http://localhost:3000` by default (`PORT` env var).
 | `PORT`             | No       | `3000`                | HTTP port                                               |
 | `MANAGER_EMAIL`    | No       | `manager@example.com` | Seed Manager account email                              |
 | `MANAGER_PASSWORD` | No       | `ManagerPass123`      | Seed Manager account password                           |
+| `CRON_ENABLED`     | No       | enabled               | Set to `false` to skip the invoice reminder cron        |
 
 Sprint 1 uses short-lived access tokens only — no refresh tokens.
 
@@ -236,7 +237,7 @@ docker pull ghcr.io/joannamikul/upskill-nodejs:latest
 
 ## Kubernetes (local, kind)
 
-Run the **same Docker image** inside a local Kubernetes cluster ([kind](https://kind.sigs.k8s.io/)). Manifests live in [`k8s/local.yaml`](k8s/local.yaml) — Postgres plus the API. Two **init containers** run before Nest: `wait-for-postgres` (until the DB port is open; Compose has `depends_on`, K8s does not) and `migrate` (`prisma migrate deploy`, like the `migrate` service in `docker-compose.yml`).
+Run the **same Docker image** inside a local Kubernetes cluster ([kind](https://kind.sigs.k8s.io/)). Manifests live in [`k8s/local.yaml`](k8s/local.yaml) — Postgres, the API, and one scheduler pod. Two **init containers** run before the API: `wait-for-postgres` (until the DB port is open; Compose has `depends_on`, K8s does not) and `migrate` (`prisma migrate deploy`, like the `migrate` service in `docker-compose.yml`). The scheduler pod only waits for Postgres.
 
 **Prerequisites:** Docker, [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), [kubectl](https://kubernetes.io/docs/tasks/tools/). Stop `docker compose` if it already uses port 3000.
 
@@ -254,7 +255,7 @@ kind load docker-image upskill-nodejs
 kubectl apply -f k8s/local.yaml
 
 # 4. Wait until pods are Running (Ctrl+C to leave watch mode)
-#    Expect two upskill-api pods and one postgres pod
+#    Expect two upskill-api pods, one upskill-scheduler pod, and one postgres pod
 kubectl get pods -w
 
 # 5. In another terminal: forward cluster port 3000 to localhost
@@ -267,7 +268,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/auth/regi
 # Expected: 201
 ```
 
-The API Deployment starts **two pods** (horizontal scale). Postgres stays at one pod. `kubectl port-forward` to the Service often reaches a single pod; `kubectl get endpoints upskill-api` lists both pod addresses behind the Service. The invoice reminder cron starts in every API pod, so two replicas would send the same reminder twice.
+The API Deployment starts **two pods** (horizontal scale) with `CRON_ENABLED=false`. Postgres stays at one pod. A separate Deployment `upskill-scheduler` runs **one pod** of the same image with `CRON_ENABLED=true`, so the invoice reminder runs once. `kubectl port-forward` to the Service often reaches a single pod; `kubectl get endpoints upskill-api` lists both API pod addresses behind the Service.
 
 ```bash
 # Raise the API to three pods, then return to the manifest default

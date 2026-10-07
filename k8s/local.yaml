@@ -1,4 +1,4 @@
-# Local kind stack: Postgres + API (same roles as docker-compose.yml).
+# Local kind stack: Postgres + API + one scheduler pod (same roles as docker-compose.yml, plus a single cron replica).
 # Dev-only credentials — do not reuse in production.
 
 ---
@@ -95,6 +95,8 @@ spec:
               value: postgresql://postgres:postgres@postgres:5432/upskill?schema=public
             - name: JWT_SECRET
               value: docker-smoke-secret
+            - name: CRON_ENABLED
+              value: "false"
 
 ---
 apiVersion: v1
@@ -107,3 +109,41 @@ spec:
   ports:
     - port: 3000
       targetPort: 3000
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: upskill-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: upskill-scheduler
+  template:
+    metadata:
+      labels:
+        app: upskill-scheduler
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres 5432; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+      containers:
+        - name: scheduler
+          image: upskill-nodejs
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DATABASE_URL
+              value: postgresql://postgres:postgres@postgres:5432/upskill?schema=public
+            - name: JWT_SECRET
+              value: docker-smoke-secret
+            - name: CRON_ENABLED
+              value: "true"
